@@ -620,6 +620,7 @@ add_action( 'admin_init', function () {
 
 	add_settings_field( 'teams', 'Teams', function () {
 		$teams = hbch_get_setting( 'teams' );
+		add_settings_field( 'teams_discover', 'Teams von handball.ch laden', 'hbch_render_teams_discover_ui', 'hbch-tab-allgemein', 'hbch_section_teams' );
 		$lines = [];
 		foreach ( $teams as $slug => $id ) {
 			$lines[] = $slug . '=' . $id;
