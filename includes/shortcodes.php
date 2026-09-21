@@ -290,6 +290,10 @@ add_shortcode( 'hbch_home_next_games', function ( $atts ) {
 
 /**
  * [hbch_home_last_games limit="3" exclude="text"] — letzte Resultate über alle Teams.
+ *
+ * Layout: Grid mit drei Spalten (Team A | Mitte | Team B). Die Mitte ist so
+ * breit wie ihr Inhalt, die beiden Team-Spalten teilen sich den Rest gleichmässig
+ * (siehe .hbch-home-result-grid in public.css).
  */
 add_shortcode( 'hbch_home_last_games', function ( $atts ) {
 	$atts = shortcode_atts( [ 'limit' => hbch_get_setting( 'default_games_limit' ), 'exclude' => '' ], $atts );
@@ -308,18 +312,20 @@ add_shortcode( 'hbch_home_last_games', function ( $atts ) {
 	$round_prefix = $f['round']['label'];
 	$spect_label  = $f['spectators']['label'];
 
-	// Datum/Halle/Zuschauer/Runde/Spielart teilen sich eine Hülle: "Auf Mobile
-	// anzeigen" bei Halle steuert die ganze Zusatzzeile.
+	// Datum/Zuschauer/Halle/Runde/Spielart teilen sich eine Hülle: "Auf Mobile
+	// anzeigen" bei Halle steuert den ganzen Meta-Block.
 	$mobile_class = ! empty( $f['venue']['show_mobile'] ) ? '' : ' hbch-hide-mobile';
 
 	$rows = '';
 	foreach ( $games as $g ) {
 		$venue_html = '<span class="hbch-venue">' . ( $show_venue ? hbch_venue_display( $g, $show_addr ) : '' ) . '</span>' . hbch_extra_line( $g, $show_round, $show_type, $round_prefix );
-		$spect_line = $show_spect
-			? '<strong>' . esc_html( $g['spectators'] ?? '' ) . '</strong> ' . esc_html( $spect_label ) . '<br>'
+		// Zuschauer stehen in derselben Zeile wie das Datum (Trennstrich per CSS).
+		$spect_html = ( $show_spect && ! empty( $g['spectators'] ) )
+			? '<span class="hbch-result-spectators"><strong>' . esc_html( $g['spectators'] ) . '</strong> ' . esc_html( $spect_label ) . '</span>'
 			: '';
 		$name_a = '<span class="hbch-hide-mobile">' . esc_html( $g['teamAName'] ?? '' ) . '</span>';
 		$name_b = '<span class="hbch-hide-mobile">' . esc_html( $g['teamBName'] ?? '' ) . '</span>';
+
 		$rows .= sprintf(
 			'<tr>
 				<td class="hbch-text-small hbch-date-raw hbch-hidden-source">%1$s</td>
@@ -327,12 +333,16 @@ add_shortcode( 'hbch_home_last_games', function ( $atts ) {
 				<td class="hbch-hidden-source">%2$s</td>
 				<td class="hbch-cell-padded">
 					<div class="hbch-home-last-game"><small><div class="hbch-home-result-grid">
-						<div>%3$s<br> %4$s</div>
-						<div class="hbch-text-center"><span class="hbch-league">%5$s</span><br>
-							<big><strong class="hbch-score-result">%6$s:%7$s</strong></big><br>
-							<span class="' . esc_attr( trim( $mobile_class ) ) . '"><span class="hbch-game-date-text">%1$s</span> | %8$s%9$s</span>
+						<div class="hbch-result-team">%3$s %4$s</div>
+						<div class="hbch-result-center">
+							<span class="hbch-league">%5$s</span>
+							<big><strong class="hbch-score-result">%6$s:%7$s</strong></big>
+							<span class="hbch-result-meta%12$s">
+								<span class="hbch-result-meta-line"><span class="hbch-game-date-text">%1$s</span>%8$s</span>
+								<span class="hbch-result-venue">%9$s</span>
+							</span>
 						</div>
-						<div>%10$s<br> %11$s</div>
+						<div class="hbch-result-team">%10$s %11$s</div>
 					</div></small></div>
 				</td>
 			</tr>',
@@ -343,10 +353,11 @@ add_shortcode( 'hbch_home_last_games', function ( $atts ) {
 			esc_html( $g['leagueShort'] ?? '' ),
 			esc_html( $g['teamAScoreFT'] ?? '' ),
 			esc_html( $g['teamBScoreFT'] ?? '' ),
-			$spect_line,
+			$spect_html,
 			$venue_html,
 			hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-score', 'lazy', 90, $dual_logo ),
-			$name_b
+			$name_b,
+			$mobile_class
 		);
 	}
 
