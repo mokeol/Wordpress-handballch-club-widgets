@@ -707,10 +707,9 @@ add_action( 'admin_init', function () {
 	add_settings_section( 'hbch_section_teams', 'Team-Zuordnungen', function () {
 		echo '<p>Ein Team pro Zeile, Format <code>slug=handball.ch-Team-ID</code>, z. B. <code>team1=12345</code>. Der Slug ist der Wert, den man in Shortcodes wie <code>[hbch_ranking team="team1"]</code> nach <code>team=</code> schreibt. Die Team-ID steht in der URL des Teams auf handball.ch.</p>';
 	}, 'hbch-tab-allgemein' );
-
+	add_settings_field( 'teams_discover', 'Teams von handball.ch laden', 'hbch_render_teams_discover_ui', 'hbch-tab-allgemein', 'hbch_section_teams' );
 	add_settings_field( 'teams', 'Teams', function () {
 		$teams = hbch_get_setting( 'teams' );
-		add_settings_field( 'teams_discover', 'Teams von handball.ch laden', 'hbch_render_teams_discover_ui', 'hbch-tab-allgemein', 'hbch_section_teams' );
 		$lines = [];
 		foreach ( $teams as $slug => $id ) {
 			$lines[] = $slug . '=' . $id;
