@@ -92,7 +92,97 @@ function hbch_render_color_field( $role_id ) {
 		esc_html( $role['help'] )
 	);
 }
+/**
+ * UI "Teams von handball.ch laden" (Reiter Allgemein & API). Liest
+ * /clubs/{id}/teams live (kein Cache) und schlägt slug=ID-Zeilen vor, die
+ * sich per Klick ins Feld "Teams" oben einfügen lassen.
+ */
+function hbch_render_teams_discover_ui() {
+	$club_id = (int) hbch_get_setting( 'club_id' );
 
+	echo '<p class="description" style="margin:0 0 0.75em;">Liest alle beim Verein hinterlegten Teams direkt bei handball.ch aus und schlägt fertige <code>slug=ID</code>-Zeilen fürs Feld "Teams" oben vor.</p>';
+
+	if ( ! $club_id ) {
+		echo '<p><em>Bitte zuerst die Club-ID oben eintragen und speichern.</em></p>';
+		return;
+	}
+
+	if ( ! isset( $_GET['hbch_discover_teams'] ) ) {
+		printf(
+			'<a href="%s" class="button button-secondary">Teams von handball.ch laden</a>',
+			esc_url( add_query_arg( 'hbch_discover_teams', '1' ) )
+		);
+		return;
+	}
+
+	$result = hbch_fetch_club_teams_live( $club_id );
+
+	if ( isset( $result['error'] ) ) {
+		printf( '<div class="notice notice-error inline"><p>%s</p></div>', esc_html( $result['error'] ) );
+		printf( '<p><a href="%s" class="button button-secondary">Erneut versuchen</a></p>', esc_url( add_query_arg( 'hbch_discover_teams', '1' ) ) );
+		return;
+	}
+
+	$teams = $result['teams'];
+	if ( empty( $teams ) ) {
+		echo '<p><em>Keine Teams gefunden.</em></p>';
+		return;
+	}
+
+	$existing_ids = array_flip( hbch_get_setting( 'teams' ) );
+	$used_slugs   = [];
+	$lines        = [];
+
+	echo '<table class="widefat striped" style="margin:0.75em 0;max-width:760px;"><thead><tr><th>Vorschlag</th><th>Teamname</th><th>Liga</th><th>Verein</th></tr></thead><tbody>';
+	foreach ( $teams as $id => $t ) {
+		$slug = $base = hbch_suggest_team_slug( $t );
+		$i    = 2;
+		while ( isset( $used_slugs[ $slug ] ) ) {
+			$slug = $base . '-' . $i++;
+		}
+		$used_slugs[ $slug ] = true;
+		$lines[] = $slug . '=' . $id;
+
+		$already = isset( $existing_ids[ $id ] )
+			? ' <span style="color:#2e7d32;">— bereits als „' . esc_html( $existing_ids[ $id ] ) . '“ eingetragen</span>'
+			: '';
+
+		printf(
+			'<tr><td><code>%s</code>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>',
+			esc_html( $slug . '=' . $id ),
+			$already,
+			esc_html( $t['teamName'] ?? '' ),
+			esc_html( $t['leagueLong'] ?? ( $t['leagueShort'] ?? '' ) ),
+			esc_html( $t['clubName'] ?? '' )
+		);
+	}
+	echo '</tbody></table>';
+
+	printf( '<button type="button" id="hbch-discover-apply" class="button button-primary">Alle oben ins Team-Feld einfügen</button> ' );
+	printf( '<a href="%s" class="button button-secondary">Neu laden</a>', esc_url( add_query_arg( 'hbch_discover_teams', '1' ) ) );
+
+	printf(
+		'<script>
+(function () {
+	var btn = document.getElementById("hbch-discover-apply");
+	if (!btn) { return; }
+	btn.addEventListener("click", function () {
+		var ta = document.getElementById("hbch-teams-raw");
+		var lines = ta.value.split(/\r?\n/).filter(function (l) { return l.trim() !== ""; });
+		var toAdd = %s;
+		toAdd.forEach(function (line) {
+			var slug = line.split("=")[0];
+			var exists = lines.some(function (l) { return l.split("=")[0] === slug; });
+			if (!exists) { lines.push(line); }
+		});
+		ta.value = lines.join("\n");
+		ta.scrollIntoView({ behavior: "smooth", block: "center" });
+	});
+})();
+</script>',
+		wp_json_encode( $lines )
+	);
+}
 add_action( 'admin_menu', function () {
 	add_options_page(
 		'handball.ch Club-Widgets',
