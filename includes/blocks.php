@@ -62,7 +62,7 @@ add_action( 'init', function () {
 
 	hbch_register_block(
 		'handballch/ranking',
-		'handball.ch: Rangliste (kompakt)',
+		'Rangliste (kompakt)',
 		'Kompakte Rangliste (Platz, Team, Spiele, Punkte) für ein Team — entspricht [hbch_ranking].',
 		'editor-ol',
 		$team_attr,
@@ -73,7 +73,7 @@ add_action( 'init', function () {
 
 	hbch_register_block(
 		'handballch/team-ranking',
-		'handball.ch: Rangliste (detailliert)',
+		'Rangliste (detailliert)',
 		'Detaillierte Rangliste mit Logo, S/U/N, Toren und Auf-/Abstiegszonen — entspricht [hbch_team_ranking].',
 		'chart-bar',
 		$team_attr,
@@ -84,7 +84,7 @@ add_action( 'init', function () {
 
 	hbch_register_block(
 		'handballch/team-next-games',
-		'handball.ch: Team-Spielplan – nächste Spiele',
+		'Team – nächste Spiele',
 		'Noch ausstehende Spiele eines Teams, aufsteigend sortiert — entspricht [hbch_team_next_games].',
 		'calendar-alt',
 		$team_attr,
@@ -95,7 +95,7 @@ add_action( 'init', function () {
 
 	hbch_register_block(
 		'handballch/team-last-games',
-		'handball.ch: Team-Spielplan – letzte Resultate',
+		'Team – Resultate',
 		'Bereits gespielte Spiele eines Teams mit Resultat, absteigend sortiert — entspricht [hbch_team_last_games].',
 		'awards',
 		$team_attr,
@@ -106,7 +106,7 @@ add_action( 'init', function () {
 
 	hbch_register_block(
 		'handballch/next-game',
-		'handball.ch: Countdown (nächstes Spiel)',
+		'Countdown (nächstes Spiel)',
 		'Nächstes Spiel eines Teams mit live laufendem Countdown — entspricht [hbch_next_game]. Einstellungen im Reiter "Countdown".',
 		'clock',
 		$team_attr,
@@ -122,7 +122,7 @@ add_action( 'init', function () {
 
 	hbch_register_block(
 		'handballch/home-next-games',
-		'handball.ch: Vereinsweit – nächste Spiele',
+		'Verein – nächste Spiele',
 		'Kommende Spiele über alle Teams — entspricht [hbch_home_next_games].',
 		'calendar',
 		$home_attrs,
@@ -136,7 +136,7 @@ add_action( 'init', function () {
 
 	hbch_register_block(
 		'handballch/home-last-games',
-		'handball.ch: Vereinsweit – letzte Resultate',
+		'Verein – letzte Resultate',
 		'Letzte Resultate über alle Teams — entspricht [hbch_home_last_games].',
 		'list-view',
 		$home_attrs,
@@ -150,7 +150,7 @@ add_action( 'init', function () {
 
 	hbch_register_block(
 		'handballch/ics-subscribe',
-		'handball.ch: Kalender abonnieren',
+		'Kalender abonnieren',
 		'"Kalender abonnieren"-Button mit Dropdown (ICS/webcal, Google Kalender, Link) — entspricht [hbch_ics].',
 		'download',
 		[
