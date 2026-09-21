@@ -1,0 +1,49 @@
+/**
+ * Nur für das Adminpanel (Einstellungen -> handball.ch Club-Widgets) und den
+ * Block-Editor, nicht im Frontend geladen.
+ */
+
+/* Live-Vorschau-Kasten */
+.hbch-admin-preview {
+	border: 1px solid #ccd0d4;
+	background: #fff;
+	padding: 14px;
+	max-width: 900px;
+	overflow: auto;
+	margin-bottom: 1.5em;
+}
+
+/* Reiter "Farben": Das Kalender-Dropdown ist im Frontend eingeklappt und wird
+   per JS geöffnet, das im Adminpanel nicht läuft. In der Vorschau wird es
+   deshalb dauerhaft angezeigt, damit die Menü-Farben sichtbar sind. */
+.hbch-admin-preview--open-menu .hbch-ics-dropdown-menu[hidden] {
+	display: block;
+	position: static;
+	margin-top: 8px;
+}
+
+/* Reiter "Farben": Variablenname neben dem Farbfeld */
+.hbch-color-field code {
+	margin-left: 8px;
+}
+
+/* Karten-Look für die Reiter ohne Settings-API (Diagnose, Anleitung, Changelog) */
+.hbch-admin-card {
+	background: #fff;
+	border: 1px solid #ccd0d4;
+	padding: 1em 1.5em;
+	max-width: 900px;
+	margin: 0 0 1.5em;
+}
+.hbch-admin-card > h2:first-child,
+.hbch-admin-card > h3:first-child {
+	margin-top: 0;
+}
+.hbch-admin-card table.form-table {
+	margin-top: 0;
+}
+
+/* Block-Editor: Hinweis, solange kein Team konfiguriert ist */
+.handballch-api-block-notice {
+	margin-bottom: 1em;
+}
