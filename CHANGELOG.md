@@ -4,6 +4,13 @@ Die Versionshistorie steht in dieser Datei; der Reiter „Changelog“ im Adminp
 Bei jedem Release: Header-Version **und** Konstante `HBCH_VERSION` in `handballch-api.php` gemeinsam anpassen.
 Der Dateiname muss exakt `CHANGELOG.md` lauten (auf Linux-Servern case-sensitive).
 
+## 1.0.1 — Layout „Vereinsweit – letzte Resultate“
+- `[hbch_home_last_games]` / Block „Vereinsweit – letzte Resultate“: Datum und Zuschauerzahl stehen auf einer Zeile
+  (auf schmalen Bildschirmen untereinander).
+- Neues Grid-Layout: die Mitte (Liga, Resultat, Datum, Halle) ist so breit wie ihr Inhalt, die beiden Team-Spalten
+  sind immer gleich breit.
+- Die Zuschauerzeile erscheint nur noch, wenn eine Zuschauerzahl vorhanden ist.
+
 ## 1.0.0 — Erste öffentliche Version
 - Shortcodes und Gutenberg-Blöcke für kompakte und detaillierte Rangliste (mit Auf-/Abstiegszonen), Team-Spielplan
   (nächste/letzte Spiele), Vereins-Spielplan für die Startseite, Countdown zum nächsten Spiel und
