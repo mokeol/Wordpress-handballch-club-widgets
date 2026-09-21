@@ -1,0 +1,602 @@
+/*
+ * handball.ch Club-Widgets — Frontend-Styles
+ *
+ * Nur CSS für Markup, das das Plugin selbst ausgibt. Klassen: hbch-*.
+ *
+ * FARBEN: keine festen Farbwerte in dieser Datei. Alle Farben sind
+ * CSS-Variablen, die das Plugin als :root-Regel direkt nach dieser Datei
+ * ausgibt (Werte: Adminpanel -> Reiter "Farben"). Gutenberg-Blöcke
+ * überschreiben sie pro Block am Block-Wrapper.
+ *
+ *   --hbch-color-accent        Akzent (eigene Mannschaft, Liga, Halle, Countdown)
+ *   --hbch-color-inverse       Schrift auf Farbflächen
+ *   --hbch-color-muted         Grau (Kopfzeile, Labels, neutrale Badges)
+ *   --hbch-color-dark          Dunkelfläche (Ergebnis-Badge mobil, Schatten)
+ *   --hbch-color-live          LIVE-Badge
+ *   --hbch-color-line          Linien & Rahmen
+ *   --hbch-color-surface-alt   Zebra-Zeilen, Hover
+ *   --hbch-color-surface       Hintergrund Kalender-Dropdown
+ *   --hbch-zone-promotion-direct / -promotion-candidate /
+ *   --hbch-zone-relegation-candidate / -relegation-direct
+ *                              Rang-Badge nach Auf-/Abstiegszone
+ *
+ * Seitenspezifisch, z. B. im Feld "Eigenes CSS":
+ *   .page-id-123 { --hbch-color-accent: #004ABD; }
+ *
+ * Die HBCH-TAB-Marker begrenzen die Abschnitte, die das Adminpanel als
+ * Standard-CSS-Referenz anzeigt.
+ */
+
+
+/* HBCH-TAB:rangliste:START */
+/* 1. Rangliste kompakt ([hbch_ranking], #hbch-ranking-mini) */
+#hbch-ranking-mini {
+	border: 0;
+	text-transform: uppercase;
+}
+
+.hbch-ranking-header-row th {
+	border: 0;
+	color: var(--hbch-color-muted);
+	font-weight: 550;
+}
+
+.hbch-text-center {
+	text-align: center;
+}
+
+
+/* 2. Rangliste detailliert ([hbch_team_ranking], #hbch-ranking-team) */
+#hbch-ranking-team {
+	border: 0;
+	text-transform: uppercase;
+}
+
+#hbch-ranking-team th {
+	border: 0;
+}
+
+.hbch-col-wide {
+	/* Spalten S/U/N/Tore/+-: auf schmalen Bildschirmen ausgeblendet (Media Query unten) */
+}
+
+.hbch-rank-cell {
+	width: 46px;
+	color: var(--hbch-color-inverse);
+	text-align: center;
+}
+
+.hbch-rank-badge {
+	background-color: var(--hbch-color-muted);
+	display: block;
+	padding: 2px 12px;
+}
+
+/* Auf-/Abstiegszonen (Klasse setzt hbch_rank_zone_class() in includes/api.php) */
+.hbch-rank-badge.hbch-zone-promotion-direct {
+	background-color: var(--hbch-zone-promotion-direct);
+}
+
+.hbch-rank-badge.hbch-zone-promotion-candidate {
+	background-color: var(--hbch-zone-promotion-candidate);
+}
+
+.hbch-rank-badge.hbch-zone-relegation-candidate {
+	background-color: var(--hbch-zone-relegation-candidate);
+}
+
+.hbch-rank-badge.hbch-zone-relegation-direct {
+	background-color: var(--hbch-zone-relegation-direct);
+}
+
+/* Eigene Mannschaft (Klasse setzt das Frontend-JS, siehe hbch_get_highlight_js_body()) */
+.hbch-row-highlight,
+.hbch-row-highlight-mini td {
+	background-color: var(--hbch-color-accent);
+	color: var(--hbch-color-inverse);
+}
+
+.hbch-row-highlight-mini td:first-child {
+	border-top-left-radius: 4px;
+	border-bottom-left-radius: 4px;
+}
+
+.hbch-row-highlight-mini td:last-child {
+	border-bottom-right-radius: 4px;
+	border-top-right-radius: 4px;
+}
+
+.hbch-row-divider {
+	border-bottom: 1px solid var(--hbch-color-line);
+}
+
+.hbch-row-divider-thick {
+	border-bottom: 3px solid;
+}
+
+/* Feste Bildbox (30x25px) gegen Layout-Sprünge beim Laden der Logos */
+.hbch-team-logo-sm {
+	max-height: 25px;
+	vertical-align: middle;
+	max-width: 30px;
+	width: 30px;
+	aspect-ratio: 6 / 5;
+	object-fit: contain;
+}
+/* HBCH-TAB:rangliste:END */
+
+
+/* HBCH-TAB:teamspiele:START */
+/* 3. Team-Spielplan ([hbch_team_next_games] #hbch-team-games-next,
+      [hbch_team_last_games] #hbch-team-games-last) */
+#hbch-team-games-next,
+#hbch-team-games-last {
+	border: 0;
+}
+
+.hbch-table-responsive {
+	border: 0;
+}
+
+.hbch-game-row {
+	text-align: center;
+}
+
+.hbch-game-row .hbch-align-right {
+	text-align: right;
+}
+
+.hbch-game-row .hbch-align-left {
+	text-align: left;
+}
+
+.hbch-vs-cell {
+	font-weight: bold;
+	text-align: center;
+}
+
+.hbch-score-badge {
+	font-weight: bold;
+}
+
+th.hbch-game-row {
+	background-color: transparent !important;
+}
+
+.hbch-game-row:nth-child(2n) {
+	background-color: var(--hbch-color-surface-alt);
+}
+
+/* .hbch-priority-1 ist standardmässig ausgeblendet und erscheint erst in der
+   mobilen Ansicht (<= 950px). */
+.hbch-priority-1 {
+	display: none;
+}
+
+.hbch-cell-padded {
+	padding: 10px 0;
+}
+
+.hbch-hidden-source {
+	display: none;
+}
+
+/* Forfait: Datum + Badge statt Datum/Uhrzeit */
+.hbch-forfait-badge {
+	display: inline-block;
+	padding: 0.1em 0.5em;
+	border-radius: 999px;
+	background: var(--hbch-color-muted);
+	color: var(--hbch-color-inverse);
+	font-size: 0.85em;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	white-space: nowrap;
+}
+
+@media screen and (max-width: 950px) {
+	.hbch-table-responsive tr {
+		display: flex;
+		flex-wrap: wrap;
+	}
+	.hbch-priority-2 {
+		display: none;
+	}
+	.hbch-col-half {
+		width: 50%;
+	}
+	.hbch-team-cell {
+		width: 100%;
+		text-align: left !important;
+		border: 0;
+	}
+	.hbch-game-row {
+		border-bottom: 0;
+		padding-bottom: 10px;
+	}
+	.hbch-text-small {
+		font-size: small;
+		border: 0;
+	}
+	.hbch-priority-1 {
+		border: 0;
+		display: inline;
+	}
+	.hbch-score-badge {
+		background-color: var(--hbch-color-dark);
+		color: var(--hbch-color-inverse);
+		padding: 5px 0 5px 5px;
+		margin-right: 10px;
+	}
+	.hbch-result-cell {
+		text-align: left;
+		width: 100%;
+	}
+	.hbch-align-left {
+		padding-top: 0;
+	}
+	.hbch-align-right {
+		padding-bottom: 0;
+	}
+	.hbch-col-wide {
+		display: none;
+	}
+	/* "Auf Mobile anzeigen" aus: Zelle nur auf schmalen Bildschirmen ausblenden */
+	.hbch-mobile-hide-field {
+		display: none;
+	}
+}
+/* HBCH-TAB:teamspiele:END */
+
+
+/* HBCH-TAB:startseite:START */
+/* 4. Startseiten-Widgets ([hbch_home_next_games] .hbch-home-games-next,
+      [hbch_home_last_games] .hbch-home-games-last) */
+.hbch-table-plain {
+	border: 0;
+}
+
+.hbch-table-plain td,
+.hbch-table-plain table {
+	border: 0;
+}
+
+.hbch-home-game-grid {
+	text-transform: uppercase;
+	padding: 5px;
+	grid-template-columns: 38% 24% 38%;
+	display: grid;
+	align-items: center;
+}
+
+.hbch-home-next-game {
+	text-align: center;
+}
+
+.hbch-home-result-grid {
+	text-transform: uppercase;
+	grid-template-columns: 40% 20% 40%;
+	display: grid;
+	align-items: center;
+}
+
+.hbch-score-result {
+	font-size: 2em;
+}
+
+.hbch-league {
+	font-size: 1.3em;
+	color: var(--hbch-color-accent);
+}
+
+.hbch-home-last-game {
+	text-align: center;
+}
+
+.hbch-venue,
+.hbch-venue-mini {
+	color: var(--hbch-color-accent);
+}
+
+.hbch-team-logo-score {
+	max-height: 80px;
+	width: auto;
+	min-width: 30px;
+}
+
+.hbch-league-mini {
+	font-size: 1em;
+	color: var(--hbch-color-accent);
+}
+
+.hbch-game-datetime {
+	font-size: 1.3em;
+}
+
+.hbch-team-logo-preview {
+	max-height: 60px;
+	max-width: 80px;
+	width: auto;
+	min-width: 30px;
+}
+
+@media screen and (max-width: 600px) {
+	.hbch-hide-mobile {
+		display: none;
+	}
+	.hbch-score-result {
+		font-size: 1.2em;
+	}
+	.hbch-league {
+		font-size: 1em;
+	}
+	.hbch-team-logo-score {
+		max-height: 60px;
+	}
+}
+/* HBCH-TAB:startseite:END */
+
+
+/* HBCH-TAB:countdown:START */
+/* 5. Countdown ([hbch_next_game]) */
+.hbch-next-game-widget {
+	width: 100%;
+	text-align: center;
+	text-transform: uppercase;
+	border: none;
+	table-layout: auto;
+	padding-left: min(2%);
+}
+
+.hbch-next-game-widget td {
+	padding-top: 0;
+	padding-bottom: 0 !important;
+}
+
+.hbch-next-game-title {
+	font-size: 0.8em;
+	padding-bottom: 8px;
+	text-align: left;
+	color: var(--hbch-color-accent);
+}
+
+.hbch-next-game-widget .hbch-next-game-team,
+.hbch-next-game-widget .hbch-next-game-vs,
+.hbch-next-game-widget .hbch-countdown-number {
+	width: 1%;
+	white-space: nowrap;
+}
+
+.hbch-next-game-team {
+	font-weight: 700;
+	text-align: left;
+}
+
+.hbch-countdown-number {
+	font-size: 1.4em;
+	font-weight: 700;
+	color: var(--hbch-color-accent);
+	padding: 0 40px;
+}
+
+.hbch-next-game-spacer {
+	width: auto;
+}
+
+.hbch-next-game-datetext {
+	text-align: left;
+}
+
+.hbch-next-game-labels-row td {
+	font-size: 0.75em;
+	color: var(--hbch-color-muted);
+}
+
+/* Mobile: Reihenfolge Titel -> Team -> Datum -> Zahlen -> Labels */
+@media screen and (max-width: 900px) {
+	.hbch-next-game-widget tbody {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+	}
+
+	.hbch-next-game-widget tr {
+		display: contents; /* Zellen werden direkte Flex-Kinder von tbody */
+	}
+
+	.hbch-next-game-title {
+		order: 1;
+		flex-basis: 100%;
+	}
+
+	.hbch-next-game-team,
+	.hbch-next-game-vs {
+		order: 2;
+	}
+
+	.hbch-next-game-widget .hbch-next-game-team,
+	.hbch-next-game-widget .hbch-next-game-vs {
+		width: auto;
+		white-space: normal;
+		font-size: 0.9em;
+	}
+
+	.hbch-next-game-datetext {
+		order: 3;
+		flex-basis: 100%;
+		text-align: center;
+	}
+
+	.hbch-countdown-number {
+		order: 4;
+		width: auto;
+		flex-basis: 33%;
+		padding: 10px 20px 0;
+	}
+
+	.hbch-next-game-label {
+		order: 5;
+		flex-basis: 33%;
+	}
+
+	.hbch-next-game-spacer {
+		display: none;
+	}
+}
+
+/* Sehr schmale Bildschirme: Teams und "vs" je auf eigener Zeile */
+@media screen and (max-width: 480px) {
+	.hbch-next-game-widget .hbch-next-game-team,
+	.hbch-next-game-widget .hbch-next-game-vs {
+		flex-basis: 100%;
+		text-align: center;
+	}
+}
+/* HBCH-TAB:countdown:END */
+
+
+/* HBCH-TAB:ics:START */
+/* 6. ICS-Kalender-Export ([hbch_ics], Dropdown-Button) */
+.hbch-ics-dropdown {
+	position: relative;
+	display: inline-block;
+	width: 100%;
+}
+
+.hbch-ics-dropdown-toggle {
+	cursor: pointer;
+}
+
+.hbch-ics-dropdown-menu {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	margin: 4px 0 0 0;
+	padding: 0;
+	list-style: none;
+	background: var(--hbch-color-surface);
+	border: 1px solid var(--hbch-color-line);
+	border-radius: 6px;
+	/* Schatten aus der Dunkelfläche abgeleitet; ältere Browser ohne
+	   color-mix() ignorieren die Zeile (Menü hat dann nur den Rahmen). */
+	box-shadow: 0 2px 8px color-mix(in srgb, var(--hbch-color-dark) 15%, transparent);
+	min-width: 260px;
+	z-index: 10;
+}
+
+.hbch-ics-dropdown-item {
+	display: block;
+	width: 100%;
+	padding: 10px 14px;
+	text-align: left;
+	background: none;
+	border: none;
+	font: inherit;
+	color: inherit;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.hbch-ics-dropdown-item:hover {
+	background: var(--hbch-color-surface-alt);
+}
+
+.hbch-ics-hidden-url {
+	display: none;
+}
+
+.hbch-ics-icon svg {
+	height: 1em;
+}
+/* HBCH-TAB:ics:END */
+
+/* HBCH-TAB:games:matchcenter-link:START */
+.hbch-matchcenter-link {
+	display: inline-flex;
+	vertical-align: middle;
+}
+.hbch-matchcenter-link svg {
+	height: 1em;
+	width: 1em;
+}
+/* HBCH-TAB:games:matchcenter-link:END */
+
+/* HBCH-TAB:games:live-badge:START */
+.hbch-live-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3em;
+	padding: 0.15em 0.55em;
+	border-radius: 999px;
+	background: var(--hbch-color-live);
+	color: var(--hbch-color-inverse);
+	font-size: 0.8em;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-decoration: none;
+	white-space: nowrap;
+}
+.hbch-live-badge:hover,
+.hbch-live-badge:focus {
+	filter: brightness(0.8);
+	color: var(--hbch-color-inverse);
+}
+.hbch-live-dot {
+	display: inline-block;
+	width: 0.5em;
+	height: 0.5em;
+	border-radius: 50%;
+	background: var(--hbch-color-inverse);
+	animation: hbch-live-pulse 1.4s ease-in-out infinite;
+}
+@keyframes hbch-live-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.25; }
+}
+/* HBCH-TAB:games:live-badge:END */
+
+/* HBCH-TAB:shared:START */
+/* 7. Klassen, die in mehreren Widgets vorkommen */
+.hbch-extra-info {
+	opacity: 0.75;
+	font-size: 0.85em;
+}
+
+/* Kurzname/Vollname-Umschaltung auf schmalen Bildschirmen */
+.hbch-short-name {
+	display: none;
+}
+
+@media screen and (max-width: 480px) {
+	.hbch-full-name {
+		display: none;
+	}
+	.hbch-short-name {
+		display: inline;
+	}
+}
+
+/* Doppel-Logo für Spielgemeinschaften (SG über zwei Vereine, siehe
+   hbch_team_logo_markup()): beide Logos teilen sich den Platz eines einzelnen.
+   aspect-ratio verhindert, dass die Bildbox auf 0x0 zusammenfällt, solange ein
+   JS-Lazy-Load-Plugin das Platzhalterbild noch nicht ersetzt hat (sonst lädt
+   iOS Safari das Logo nie nach). */
+.hbch-team-logo-group {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	max-width: 100%;
+	vertical-align: middle;
+}
+
+.hbch-team-logo-dual {
+	flex: 1 1 auto;
+	min-width: 0;
+	max-width: 48%;
+	width: auto !important;
+	height: auto;
+	aspect-ratio: 1 / 1;
+	object-fit: contain;
+}
+/* HBCH-TAB:shared:END */
