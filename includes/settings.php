@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 function hbch_settings_defaults() {
 	$defaults = [
 		'club_id'                   => 0,
-		'api_token'                 => '',
+		'api_secret'                => '',
 		'teams'                     => [],
 		'cache_ranking_minutes'     => 20,
 		'cache_games_minutes'       => 20,
@@ -139,8 +139,23 @@ function hbch_get_team_id( $slug ) {
 }
 
 /**
- * API-Token (Base64-String "ClubID:Secret") aus dem Adminpanel.
+ * API-Token (Base64-String "ClubID:Secret") für den Authorization-Header.
+ *
+ * Wird aus der Club-ID und dem im Adminpanel hinterlegten Passwort (Secret)
+ * automatisch zusammengesetzt — niemand muss selbst Base64 kodieren.
+ *
+ * Rückwärtskompatibilität: Ist noch ein fertiger Token aus einer älteren
+ * Plugin-Version gespeichert (Feld "api_token", vor der Umstellung auf
+ * Club-ID + Passwort) und wurde das Passwort-Feld noch nicht neu ausgefüllt,
+ * wird dieser alte Token weiterverwendet.
  */
 function hbch_get_api_token() {
+	$club_id = (int) hbch_get_setting( 'club_id' );
+	$secret  = trim( (string) hbch_get_setting( 'api_secret' ) );
+
+	if ( $club_id > 0 && $secret !== '' ) {
+		return base64_encode( $club_id . ':' . $secret );
+	}
+
 	return trim( (string) hbch_get_setting( 'api_token' ) );
 }
