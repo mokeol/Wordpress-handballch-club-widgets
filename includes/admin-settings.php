@@ -608,7 +608,7 @@ add_action( 'admin_init', function () {
 
 	add_settings_field( 'api_secret', 'API-Passwort', function () {
 		printf(
-			'<input type="password" name="%s[api_secret]" value="%s" class="regular-text" autocomplete="off"><p class="description">Das Passwort (Secret), das der SHV zusammen mit der Club-ID ausstellt. Wird zusammen mit der Club-ID oben automatisch zu "Authorization: Basic ClubID:Secret" (Base64) kodiert.</p>',
+			'<input type="password" name="%s[api_secret]" value="%s" class="regular-text" autocomplete="off"><p class="description">Das Passwort (Secret), das der SHV zusammen mit der Club-ID ausstellt.</p>',
 			HBCH_OPTION,
 			esc_attr( hbch_get_setting( 'api_secret' ) )
 		);
