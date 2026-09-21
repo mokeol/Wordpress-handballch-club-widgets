@@ -4,7 +4,7 @@ Tags: handball, sports, standings, fixtures, calendar
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -115,6 +115,9 @@ The API has no "running" status, so a game counts as live for 90 minutes after k
 No, it is built for the API of the Swiss Handball Federation.
 
 == Changelog ==
+
+= 1.0.1 =
+* Layout of the club-wide "latest results" widget: date and spectators on one line, team columns of equal width.
 
 = 1.0.0 =
 * First public release.
