@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Club-Widgets für handball.ch (inoffiziell)
  * Description:       Ranglisten, Spielpläne, Resultate, Countdown und ICS-Kalender auf Basis der clubapi.handball.ch-API, als Shortcodes und Gutenberg-Blöcke. Inoffizielles Plugin, nicht mit dem Schweizerischen Handballverband (SHV) verbunden.
- * Version:           1.0.0
+ * Version:           1.0.1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Albis Foxes
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Muss immer identisch zur "Version:"-Zeile oben sein (Cache-Buster für CSS/JS).
-define( 'HBCH_VERSION', '1.0.0' );
+define( 'HBCH_VERSION', '1.0.1' );
 define( 'HBCH_PATH', plugin_dir_path( __FILE__ ) );
 define( 'HBCH_URL', plugin_dir_url( __FILE__ ) );
 define( 'HBCH_OPTION', 'hbch_settings' );
