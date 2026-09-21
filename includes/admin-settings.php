@@ -625,7 +625,7 @@ add_action( 'admin_init', function () {
 			$lines[] = $slug . '=' . $id;
 		}
 		printf(
-			'<textarea name="%s[teams_raw]" rows="9" cols="40" class="large-text code">%s</textarea>',
+			'<textarea id="hbch-teams-raw" name="%s[teams_raw]" rows="9" cols="40" class="large-text code">%s</textarea>',
 			HBCH_OPTION,
 			esc_textarea( implode( "\n", $lines ) )
 		);
