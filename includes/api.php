@@ -548,7 +548,59 @@ function hbch_validate_all_teams() {
 	}
 	return $results;
 }
+/**
+ * Alle Teams des Vereins live von handball.ch (kein Cache — nur für die
+ * einmalige "Teams laden"-Funktion im Adminpanel). Die API liefert jedes
+ * Team teils mehrfach (z. B. pro Turnierrunde/Gruppe), daher Deduplizierung
+ * nach teamId.
+ */
+function hbch_fetch_club_teams_live( $club_id ) {
+	if ( ! $club_id ) {
+		return [ 'error' => 'Keine Club-ID gesetzt.' ];
+	}
 
+	$response = wp_remote_get( "https://clubapi.handball.ch/rest/v1/clubs/{$club_id}/teams", [
+		'timeout'   => 8,
+		'sslverify' => hbch_ssl_verify(),
+		'headers'   => hbch_api_auth_header(),
+	] );
+
+	if ( is_wp_error( $response ) ) {
+		return [ 'error' => $response->get_error_message() ];
+	}
+	$code = wp_remote_retrieve_response_code( $response );
+	if ( $code < 200 || $code >= 300 ) {
+		return [ 'error' => "HTTP {$code} — Club-ID oder API-Zugangsdaten prüfen." ];
+	}
+
+	$data = json_decode( wp_remote_retrieve_body( $response ), true );
+	if ( ! is_array( $data ) ) {
+		return [ 'error' => 'Ungültige Antwort der API.' ];
+	}
+
+	$teams = [];
+	foreach ( $data as $t ) {
+		$id = (int) ( $t['teamId'] ?? 0 );
+		if ( $id && ! isset( $teams[ $id ] ) ) {
+			$teams[ $id ] = $t;
+		}
+	}
+
+	return [ 'teams' => $teams ];
+}
+
+/**
+ * Slug-Vorschlag aus dem Liga-Kürzel eines Teams (z. B. "M4" -> "m4",
+ * "MU15P S2" -> "mu15p-s2"). Fällt auf den Teamnamen zurück, falls kein
+ * Liga-Kürzel vorhanden ist.
+ */
+function hbch_suggest_team_slug( array $team ) {
+	$base = sanitize_title( $team['leagueShort'] ?? '' );
+	if ( $base === '' ) {
+		$base = sanitize_title( $team['teamName'] ?? '' );
+	}
+	return $base !== '' ? $base : 'team';
+}
 /**
  * CSS-Klasse fürs Rang-Badge nach Auf-/Abstiegszone (Daten aus /teams/{id}/group).
  */
