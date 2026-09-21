@@ -1,0 +1,50 @@
+<?php
+/**
+ * Plugin Name:       Club-Widgets für handball.ch (inoffiziell)
+ * Description:       Ranglisten, Spielpläne, Resultate, Countdown und ICS-Kalender auf Basis der clubapi.handball.ch-API, als Shortcodes und Gutenberg-Blöcke. Inoffizielles Plugin, nicht mit dem Schweizerischen Handballverband (SHV) verbunden.
+ * Version:           1.0.0
+ * Requires at least: 6.0
+ * Requires PHP:      7.4
+ * Author:            Albis Foxes
+ * License:           GPL-2.0-or-later
+ * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:       handballch-api
+ *
+ * Versionshistorie: CHANGELOG.md. Nach der Aktivierung einmal unter
+ * Einstellungen → Permalinks "Änderungen speichern", damit /spielplan.ics greift.
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+// Muss immer identisch zur "Version:"-Zeile oben sein (Cache-Buster für CSS/JS).
+define( 'HBCH_VERSION', '1.0.0' );
+define( 'HBCH_PATH', plugin_dir_path( __FILE__ ) );
+define( 'HBCH_URL', plugin_dir_url( __FILE__ ) );
+define( 'HBCH_OPTION', 'hbch_settings' );
+
+require_once HBCH_PATH . 'includes/settings.php';
+require_once HBCH_PATH . 'includes/colors.php';
+require_once HBCH_PATH . 'includes/api.php';
+require_once HBCH_PATH . 'includes/rest.php';
+require_once HBCH_PATH . 'includes/shortcodes.php';
+require_once HBCH_PATH . 'includes/frontend.php';
+require_once HBCH_PATH . 'includes/ics.php';
+require_once HBCH_PATH . 'includes/blocks.php';
+
+// Das Adminpanel wird nur im Backend geladen.
+if ( is_admin() ) {
+	require_once HBCH_PATH . 'includes/admin-settings.php';
+}
+
+function hbch_activate() {
+	hbch_ics_register_rewrite_rule();
+	flush_rewrite_rules();
+}
+register_activation_hook( __FILE__, 'hbch_activate' );
+
+function hbch_deactivate() {
+	flush_rewrite_rules();
+}
+register_deactivation_hook( __FILE__, 'hbch_deactivate' );
