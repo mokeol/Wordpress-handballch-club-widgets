@@ -599,18 +599,18 @@ add_action( 'admin_init', function () {
 	// Reiter: Allgemein & API
 	// =================================================================
 	add_settings_section( 'hbch_section_api', 'API-Zugang (handball.ch)', function () {
-		echo '<p>Zugangsdaten für die clubapi.handball.ch. Club-ID und Token stellt der SHV aus. Der Token ist der Base64-kodierte String "ClubID:Secret" (Basic-Auth-Format).</p>';
+		echo '<p>Zugangsdaten für die clubapi.handball.ch. Club-ID und Passwort stellt der SHV aus. Das Plugin setzt daraus automatisch den Base64-kodierten "ClubID:Secret"-String für die Basic-Auth zusammen — du musst nichts selbst kodieren.</p>';
 	}, 'hbch-tab-allgemein' );
 
 	add_settings_field( 'club_id', 'Club-ID', function () {
 		printf( '<input type="text" name="%s[club_id]" value="%s" class="regular-text">', HBCH_OPTION, esc_attr( hbch_get_setting( 'club_id' ) ?: '' ) );
 	}, 'hbch-tab-allgemein', 'hbch_section_api' );
 
-	add_settings_field( 'api_token', 'API-Token (Base64, ClubID:Secret)', function () {
+	add_settings_field( 'api_secret', 'API-Passwort', function () {
 		printf(
-			'<input type="password" name="%s[api_token]" value="%s" class="regular-text" autocomplete="off"><p class="description">Wird als "Authorization: Basic &lt;Token&gt;"-Header gesendet.</p>',
+			'<input type="password" name="%s[api_secret]" value="%s" class="regular-text" autocomplete="off"><p class="description">Das Passwort (Secret), das der SHV zusammen mit der Club-ID ausstellt. Wird zusammen mit der Club-ID oben automatisch zu "Authorization: Basic ClubID:Secret" (Base64) kodiert.</p>',
 			HBCH_OPTION,
-			esc_attr( hbch_get_setting( 'api_token' ) )
+			esc_attr( hbch_get_setting( 'api_secret' ) )
 		);
 	}, 'hbch-tab-allgemein', 'hbch_section_api' );
 
@@ -1065,8 +1065,8 @@ function hbch_sanitize_settings( $input ) {
 		// Positive Ganzzahl, sonst 0 (= noch nicht konfiguriert).
 		$clean['club_id'] = max( 0, intval( $input['club_id'] ) );
 	}
-	if ( isset( $input['api_token'] ) ) {
-		$clean['api_token'] = trim( sanitize_text_field( $input['api_token'] ) );
+	if ( isset( $input['api_secret'] ) ) {
+		$clean['api_secret'] = trim( sanitize_text_field( $input['api_secret'] ) );
 	}
 
 	if ( isset( $input['teams_raw'] ) ) {
@@ -1217,7 +1217,7 @@ function hbch_render_settings_page() {
 		<h1>handball.ch Club-Widgets</h1>
 
 		<?php if ( ! (int) hbch_get_setting( 'club_id' ) || hbch_get_api_token() === '' ) : ?>
-			<div class="notice notice-warning"><p>Bitte zuerst Club-ID und API-Token im Reiter <a href="<?php echo esc_url( hbch_settings_url( 'allgemein' ) ); ?>">Allgemein &amp; API</a> eintragen. Beides stellt der SHV aus.</p></div>
+			<div class="notice notice-warning"><p>Bitte zuerst Club-ID und API-Passwort im Reiter <a href="<?php echo esc_url( hbch_settings_url( 'allgemein' ) ); ?>">Allgemein &amp; API</a> eintragen. Beides stellt der SHV aus.</p></div>
 		<?php endif; ?>
 
 		<h2 class="nav-tab-wrapper">
