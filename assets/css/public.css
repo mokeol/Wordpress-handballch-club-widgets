@@ -273,11 +273,50 @@ th.hbch-game-row {
 	text-align: center;
 }
 
+/* Letzte Resultate: Team A | Mitte | Team B.
+   Die Mitte ist so breit wie ihr Inhalt (max. 45 %), die beiden Team-Spalten
+   teilen sich den Rest zu gleichen Teilen und sind damit immer gleich breit. */
 .hbch-home-result-grid {
 	text-transform: uppercase;
-	grid-template-columns: 40% 20% 40%;
 	display: grid;
+	grid-template-columns: minmax(0, 1fr) fit-content(45%) minmax(0, 1fr);
+	column-gap: 12px;
 	align-items: center;
+}
+
+/* Team: Logo über dem Namen, Inhalt zentriert */
+.hbch-result-team {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	text-align: center;
+}
+
+/* Mitte: Liga, Score und Meta-Block untereinander */
+.hbch-result-center,
+.hbch-result-meta {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+}
+
+/* Datum + Zuschauer auf einer Zeile, nie mitten im Text umbrechen */
+.hbch-result-meta-line {
+	display: flex;
+	justify-content: center;
+	column-gap: 0.5em;
+	white-space: nowrap;
+}
+
+.hbch-result-spectators::before {
+	content: "|";
+	margin-right: 0.5em;
+}
+
+.hbch-home-last-game {
+	text-align: center;
 }
 
 .hbch-score-result {
@@ -287,10 +326,6 @@ th.hbch-game-row {
 .hbch-league {
 	font-size: 1.3em;
 	color: var(--hbch-color-accent);
-}
-
-.hbch-home-last-game {
-	text-align: center;
 }
 
 .hbch-venue,
@@ -332,6 +367,17 @@ th.hbch-game-row {
 	}
 	.hbch-team-logo-score {
 		max-height: 60px;
+	}
+	.hbch-home-result-grid {
+		column-gap: 6px;
+	}
+	/* Auf schmalen Bildschirmen Datum und Zuschauer untereinander, ohne Trennstrich */
+	.hbch-result-meta-line {
+		flex-direction: column;
+		align-items: center;
+	}
+	.hbch-result-spectators::before {
+		content: none;
 	}
 }
 /* HBCH-TAB:startseite:END */
