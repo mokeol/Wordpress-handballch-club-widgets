@@ -251,7 +251,13 @@ th.hbch-game-row {
 
 /* HBCH-TAB:startseite:START */
 /* 4. Startseiten-Widgets ([hbch_home_next_games] .hbch-home-games-next,
-      [hbch_home_last_games] .hbch-home-games-last) */
+      [hbch_home_last_games] .hbch-home-games-last)
+      Beide Shortcodes teilen sich im layout="cards" (Default) dasselbe
+      Markup und damit dieselben Klassen (.hbch-home-result-grid,
+      .hbch-result-team, .hbch-result-center, .hbch-result-venue …), damit
+      "nächste Spiele" optisch identisch zu "letzte Resultate" ist (Flex,
+      Grössen, Umbrüche, Mobile-Verhalten). layout="table" nutzt stattdessen
+      das Team-Spielplan-CSS im Abschnitt "teamspiele" oben. */
 .hbch-table-plain {
 	border: 0;
 }
@@ -261,21 +267,14 @@ th.hbch-game-row {
 	border: 0;
 }
 
-.hbch-home-game-grid {
-	text-transform: uppercase;
-	padding: 5px;
-	grid-template-columns: 38% 24% 38%;
-	display: grid;
-	align-items: center;
-}
-
-.hbch-home-next-game {
+.hbch-home-next-game,
+.hbch-home-last-game {
 	text-align: center;
 }
 
-/* Letzte Resultate: Team A | Mitte | Team B.
-   Die Mitte ist so breit wie ihr Inhalt (max. 45 %), die beiden Team-Spalten
-   teilen sich den Rest zu gleichen Teilen und sind damit immer gleich breit. */
+/* Team A | Mitte | Team B. Die Mitte ist so breit wie ihr Inhalt (max. 45 %),
+   die beiden Team-Spalten teilen sich den Rest zu gleichen Teilen und sind
+   damit immer gleich breit — für "nächste Spiele" und "letzte Resultate". */
 .hbch-home-result-grid {
 	text-transform: uppercase;
 	display: grid;
@@ -293,7 +292,7 @@ th.hbch-game-row {
 	text-align: center;
 }
 
-/* Mitte: Liga, Score und Meta-Block untereinander */
+/* Mitte: Liga, Ergebnis bzw. Datum/Zeit und Meta-Block untereinander */
 .hbch-result-center,
 .hbch-result-meta {
 	display: flex;
@@ -302,7 +301,9 @@ th.hbch-game-row {
 	text-align: center;
 }
 
-/* Datum + Zuschauer auf einer Zeile, nie mitten im Text umbrechen */
+/* Datum + Zuschauer auf einer Zeile, nie mitten im Text umbrechen
+   (nur "letzte Resultate": bei "nächste Spiele" steht dort kein Datum-Text,
+   sondern die Uhrzeit im Feld .hbch-game-datetime, siehe unten) */
 .hbch-result-meta-line {
 	display: flex;
 	justify-content: center;
@@ -315,10 +316,6 @@ th.hbch-game-row {
 	margin-right: 0.5em;
 }
 
-.hbch-home-last-game {
-	text-align: center;
-}
-
 .hbch-score-result {
 	font-size: 2em;
 }
@@ -328,38 +325,30 @@ th.hbch-game-row {
 	color: var(--hbch-color-accent);
 }
 
-.hbch-venue,
-.hbch-venue-mini {
+.hbch-venue {
 	color: var(--hbch-color-accent);
 }
 
+/* Logogrösse: gemeinsam für "nächste Spiele" und "letzte Resultate" */
 .hbch-team-logo-score {
 	max-height: 80px;
 	width: auto;
 	min-width: 30px;
 }
 
-.hbch-league-mini {
-	font-size: 1em;
-	color: var(--hbch-color-accent);
-}
-
+/* Datum/Zeit bei "nächste Spiele", optisch gleich gewichtet wie das
+   Ergebnis (.hbch-score-result) bei "letzte Resultate" */
 .hbch-game-datetime {
 	font-size: 1.3em;
-}
-
-.hbch-team-logo-preview {
-	max-height: 60px;
-	max-width: 80px;
-	width: auto;
-	min-width: 30px;
+	font-weight: 700;
 }
 
 @media screen and (max-width: 600px) {
 	.hbch-hide-mobile {
 		display: none;
 	}
-	.hbch-score-result {
+	.hbch-score-result,
+	.hbch-game-datetime {
 		font-size: 1.2em;
 	}
 	.hbch-league {
