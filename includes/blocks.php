@@ -115,21 +115,25 @@ add_action( 'init', function () {
 		}
 	);
 
+	// "layout": "cards" (Startseiten-Kartenlook, Default) oder "table"
+	// (Team-Spielplan-Tabellenlook, z. B. für die Gesamtspielplan-Seite).
 	$home_attrs = [
 		'limit'   => [ 'type' => 'string', 'default' => '' ],
 		'exclude' => [ 'type' => 'string', 'default' => '' ],
+		'layout'  => [ 'type' => 'string', 'default' => 'cards' ],
 	];
 
 	hbch_register_block(
 		'handballch/home-next-games',
 		'Verein – nächste Spiele',
-		'Kommende Spiele über alle Teams — entspricht [hbch_home_next_games].',
+		'Kommende Spiele über alle Teams — entspricht [hbch_home_next_games]. Layout wählbar: Karten (Startseite) oder Tabelle (wie Team-Spielplan).',
 		'calendar',
 		$home_attrs,
 		function ( $attributes ) {
 			return hbch_block_render( 'handballch/home-next-games', 'hbch_home_next_games', $attributes, [
 				'limit'   => $attributes['limit'] ?? '',
 				'exclude' => $attributes['exclude'] ?? '',
+				'layout'  => $attributes['layout'] ?? 'cards',
 			] );
 		}
 	);
@@ -137,13 +141,14 @@ add_action( 'init', function () {
 	hbch_register_block(
 		'handballch/home-last-games',
 		'Verein – letzte Resultate',
-		'Letzte Resultate über alle Teams — entspricht [hbch_home_last_games].',
+		'Letzte Resultate über alle Teams — entspricht [hbch_home_last_games]. Layout wählbar: Karten (Startseite) oder Tabelle (wie Team-Spielplan).',
 		'list-view',
 		$home_attrs,
 		function ( $attributes ) {
 			return hbch_block_render( 'handballch/home-last-games', 'hbch_home_last_games', $attributes, [
 				'limit'   => $attributes['limit'] ?? '',
 				'exclude' => $attributes['exclude'] ?? '',
+				'layout'  => $attributes['layout'] ?? 'cards',
 			] );
 		}
 	);
