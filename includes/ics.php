@@ -18,12 +18,11 @@ function hbch_ics_register_rewrite_rule() {
 }
 add_action( 'init', 'hbch_ics_register_rewrite_rule' );
 
-function hbch_ics_fetch_games( int $club_id = 0 ): array {
-	$url = $club_id
-		? "https://clubapi.handball.ch/rest/v1/clubs/{$club_id}/games"
-		: hbch_club_games_url();
-
-	return hbch_fetch_club_games( $url );
+/**
+ * Spiele des eigenen Vereins für den ICS-Export.
+ */
+function hbch_ics_fetch_games(): array {
+	return hbch_fetch_club_games( hbch_club_games_url() );
 }
 
 function hbch_ics_escape( string $text ): string {
