@@ -3,6 +3,10 @@
  * includes/shortcodes.php
  *
  * Alle Shortcodes ausser dem ICS-Button (siehe ics.php).
+ *
+ * Die eigentliche Render-Logik steckt in benannten hbch_render_*-Funktionen,
+ * die sowohl die Shortcodes als auch die Gutenberg-Blöcke (blocks.php)
+ * direkt aufrufen — ohne Umweg über do_shortcode()/Shortcode-Tags.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -10,12 +14,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * [hbch_ranking team="slug"] — kompakte Rangliste (#hbch-ranking-mini).
+ * Kompakte Rangliste (#hbch-ranking-mini) für ein Team.
  */
-add_shortcode( 'hbch_ranking', function ( $atts ) {
-	$atts    = shortcode_atts( [ 'team' => '' ], $atts );
-	$team_id = hbch_get_team_id( $atts['team'] );
-	$rows    = hbch_fetch_ranking_rows( $team_id );
+function hbch_render_ranking_table_compact( $team_id ) {
+	$rows = hbch_fetch_ranking_rows( $team_id );
 
 	$header_cells = '';
 	foreach ( hbch_ranking_enabled_columns( 'compact' ) as $key => $label ) {
@@ -26,15 +28,22 @@ add_shortcode( 'hbch_ranking', function ( $atts ) {
 	return '<table id="hbch-ranking-mini"><tbody>'
 		. '<tr class="hbch-ranking-header-row">' . $header_cells . '</tr>'
 		. $rows . '</tbody></table>';
+}
+
+/**
+ * [hbch_ranking team="slug"]
+ */
+add_shortcode( 'hbch_ranking', function ( $atts ) {
+	$atts = shortcode_atts( [ 'team' => '' ], $atts );
+	return hbch_render_ranking_table_compact( hbch_get_team_id( $atts['team'] ) );
 } );
 
 /**
- * [hbch_team_ranking team="slug"] — detaillierte Rangliste (#hbch-ranking-team).
+ * Detaillierte Rangliste (#hbch-ranking-team) für ein Team. $show_zones =
+ * false: Rang-Badge bleibt immer grau (keine Auf-/Abstiegsfarben).
  */
-add_shortcode( 'hbch_team_ranking', function ( $atts ) {
-	$atts    = shortcode_atts( [ 'team' => '' ], $atts );
-	$team_id = hbch_get_team_id( $atts['team'] );
-	$rows    = hbch_fetch_team_ranking_rows( $team_id );
+function hbch_render_ranking_table_detailed( $team_id, $show_zones = true ) {
+	$rows = hbch_fetch_team_ranking_rows( $team_id, $show_zones );
 
 	$header_cells = '';
 	foreach ( hbch_ranking_enabled_columns( 'detailed' ) as $key => $label ) {
@@ -50,14 +59,22 @@ add_shortcode( 'hbch_team_ranking', function ( $atts ) {
 	return '<table id="hbch-ranking-team"><tbody>
 		<tr class="hbch-row-divider-thick">' . $header_cells . '
 		</tr>' . $rows . '</tbody></table>';
+}
+
+/**
+ * [hbch_team_ranking team="slug"]
+ */
+add_shortcode( 'hbch_team_ranking', function ( $atts ) {
+	$atts = shortcode_atts( [ 'team' => '' ], $atts );
+	return hbch_render_ranking_table_detailed( hbch_get_team_id( $atts['team'] ) );
 } );
 
 /**
- * Tabelle "zu spielende Spiele" im Team-Spielplan-Format. Wird vom Shortcode
- * [hbch_team_next_games] und von [hbch_home_next_games layout="table"]
- * verwendet (dann mit den Spielen des ganzen Vereins). Die Felder kommen
- * immer aus den Einstellungen "Team-Spielplan" (games_fields).
- * $table_id muss pro Seite eindeutig sein.
+ * Tabelle "zu spielende Spiele" im Team-Spielplan-Format. Wird für die
+ * Team-Ebene ([hbch_team_next_games] bzw. Block "Team – Spielplan") und die
+ * Vereins-Ebene mit layout="table" verwendet (dann mit den Spielen des ganzen
+ * Vereins). Die Felder kommen immer aus den Einstellungen "Team-Spielplan"
+ * (games_fields). $table_id muss pro Seite eindeutig sein.
  */
 function hbch_render_games_table_next( array $games, $table_id ) {
 	$f = hbch_get_setting( 'games_fields' );
@@ -210,40 +227,50 @@ function hbch_render_games_table_last( array $games, $table_id ) {
 }
 
 /**
- * [hbch_team_next_games team="slug"] — zu spielende Spiele (#hbch-team-games-next).
+ * Zu spielende Spiele eines Teams (#hbch-team-games-next), inkl. JSON-LD.
+ */
+function hbch_render_team_next_games( $team_id ) {
+	$games = $team_id ? hbch_fetch_team_games( $team_id, 'planned' ) : [];
+	return hbch_render_games_table_next( $games, 'hbch-team-games-next' ) . hbch_render_games_jsonld( $games );
+}
+
+/**
+ * [hbch_team_next_games team="slug"]
  */
 add_shortcode( 'hbch_team_next_games', function ( $atts ) {
-	$atts    = shortcode_atts( [ 'team' => '' ], $atts );
-	$team_id = hbch_get_team_id( $atts['team'] );
-	$games   = $team_id ? hbch_fetch_team_games( $team_id, 'planned' ) : [];
-
-	return hbch_render_games_table_next( $games, 'hbch-team-games-next' ) . hbch_render_games_jsonld( $games );
+	$atts = shortcode_atts( [ 'team' => '' ], $atts );
+	return hbch_render_team_next_games( hbch_get_team_id( $atts['team'] ) );
 } );
 
 /**
- * [hbch_team_last_games team="slug"] — gespielte Spiele (#hbch-team-games-last).
+ * Gespielte Spiele eines Teams (#hbch-team-games-last).
+ */
+function hbch_render_team_last_games( $team_id ) {
+	$games = $team_id ? hbch_fetch_team_games( $team_id, 'played' ) : [];
+	return hbch_render_games_table_last( $games, 'hbch-team-games-last' );
+}
+
+/**
+ * [hbch_team_last_games team="slug"]
  */
 add_shortcode( 'hbch_team_last_games', function ( $atts ) {
-	$atts    = shortcode_atts( [ 'team' => '' ], $atts );
-	$team_id = hbch_get_team_id( $atts['team'] );
-	$games   = $team_id ? hbch_fetch_team_games( $team_id, 'played' ) : [];
-
-	return hbch_render_games_table_last( $games, 'hbch-team-games-last' );
+	$atts = shortcode_atts( [ 'team' => '' ], $atts );
+	return hbch_render_team_last_games( hbch_get_team_id( $atts['team'] ) );
 } );
 
 /**
- * [hbch_home_next_games limit="3" exclude="text" layout="cards|table"] —
- * kommende Spiele über alle Teams des Vereins. Ruft die REST-Callback-Funktion
- * direkt auf.
+ * Kommende Spiele über alle Teams des Vereins, inkl. JSON-LD. Ruft die
+ * REST-Callback-Funktion direkt auf.
  *
- * layout="cards" (Default): Kartenlook für die Startseite, gleiches Grid wie
- *   [hbch_home_last_games] (Felder aus dem Reiter "Vereins-Spielplan").
- * layout="table": Tabellenlook wie beim Team-Spielplan inkl. Mobile-Ansicht,
- *   z. B. für die Gesamtspielplan-Seite (Felder aus dem Reiter "Team-Spielplan").
+ * $layout: "cards" (Default) = Kartenlook für die Startseite, gleiches Grid
+ *   wie hbch_render_home_last_games() (Felder aus "Vereins-Spielplan").
+ *   "table" = Tabellenlook wie beim Team-Spielplan inkl. Mobile-Ansicht,
+ *   z. B. für die Gesamtspielplan-Seite (Felder aus "Team-Spielplan").
+ * $limit: leer = Standard-Anzahl aus den Einstellungen.
  */
-add_shortcode( 'hbch_home_next_games', function ( $atts ) {
-	$atts  = shortcode_atts( [ 'limit' => hbch_get_setting( 'default_games_limit' ), 'exclude' => '', 'layout' => 'cards' ], $atts );
-	$table = ( $atts['layout'] === 'table' );
+function hbch_render_home_next_games( $limit = '', $exclude = '', $layout = 'cards' ) {
+	$limit = ( $limit !== '' && $limit !== null ) ? $limit : hbch_get_setting( 'default_games_limit' );
+	$table = ( $layout === 'table' );
 	$f     = hbch_get_setting( $table ? 'games_fields' : 'home_fields' );
 
 	$show_round   = ! empty( $f['round']['enabled_next'] );
@@ -258,8 +285,8 @@ add_shortcode( 'hbch_home_next_games', function ( $atts ) {
 
 	// Mit LIVE-Badge bleibt ein laufendes Spiel in der Liste ("include_live").
 	$req = new WP_REST_Request( 'GET', '/handballch/v1/next-games' );
-	$req->set_param( 'limit', intval( $atts['limit'] ) );
-	$req->set_param( 'exclude', $atts['exclude'] );
+	$req->set_param( 'limit', intval( $limit ) );
+	$req->set_param( 'exclude', $exclude );
 	if ( $show_live ) {
 		$req->set_param( 'include_live', true );
 	}
@@ -287,7 +314,7 @@ add_shortcode( 'hbch_home_next_games', function ( $atts ) {
 		$is_live          = $show_live && hbch_is_game_live( $g );
 		$datetime_display = $is_live ? hbch_live_badge_markup( $g ) : '%1$s';
 
-		// Gleiches Grid wie [hbch_home_last_games]: Team A | Mitte | Team B.
+		// Gleiches Grid wie hbch_render_home_last_games(): Team A | Mitte | Team B.
 		$rows .= sprintf(
 			'<tr>
 				<td class="hbch-text-small hbch-date-raw hbch-hidden-source">%1$s</td>
@@ -327,26 +354,35 @@ add_shortcode( 'hbch_home_next_games', function ( $atts ) {
 		</tr></thead>';
 
 	return '<table class="hbch-home-games-next hbch-table-plain">' . $thead . '<tbody>' . $rows . '</tbody></table>' . hbch_render_games_jsonld( $games );
+}
+
+/**
+ * [hbch_home_next_games limit="3" exclude="text" layout="cards|table"]
+ */
+add_shortcode( 'hbch_home_next_games', function ( $atts ) {
+	$atts = shortcode_atts( [ 'limit' => '', 'exclude' => '', 'layout' => 'cards' ], $atts );
+	return hbch_render_home_next_games( $atts['limit'], $atts['exclude'], $atts['layout'] );
 } );
 
 /**
- * [hbch_home_last_games limit="3" exclude="text" layout="cards|table"] —
- * letzte Resultate über alle Teams.
+ * Letzte Resultate über alle Teams.
  *
- * layout="cards" (Default): Grid mit drei Spalten (Team A | Mitte | Team B).
- *   Die Mitte ist so breit wie ihr Inhalt, die beiden Team-Spalten teilen sich
- *   den Rest gleichmässig (siehe .hbch-home-result-grid in public.css).
- * layout="table": Tabellenlook wie beim Team-Spielplan (siehe
- *   [hbch_home_next_games]).
+ * $layout: "cards" (Default) = Grid mit drei Spalten (Team A | Mitte | Team
+ *   B). Die Mitte ist so breit wie ihr Inhalt, die beiden Team-Spalten
+ *   teilen sich den Rest gleichmässig (siehe .hbch-home-result-grid in
+ *   public.css). "table" = Tabellenlook wie beim Team-Spielplan (siehe
+ *   hbch_render_home_next_games()).
+ * $limit: leer = Standard-Anzahl aus den Einstellungen.
  */
-add_shortcode( 'hbch_home_last_games', function ( $atts ) {
-	$atts = shortcode_atts( [ 'limit' => hbch_get_setting( 'default_games_limit' ), 'exclude' => '', 'layout' => 'cards' ], $atts );
-	$req  = new WP_REST_Request( 'GET', '/handballch/v1/last-games' );
-	$req->set_param( 'limit', intval( $atts['limit'] ) );
-	$req->set_param( 'exclude', $atts['exclude'] );
+function hbch_render_home_last_games( $limit = '', $exclude = '', $layout = 'cards' ) {
+	$limit = ( $limit !== '' && $limit !== null ) ? $limit : hbch_get_setting( 'default_games_limit' );
+
+	$req = new WP_REST_Request( 'GET', '/handballch/v1/last-games' );
+	$req->set_param( 'limit', intval( $limit ) );
+	$req->set_param( 'exclude', $exclude );
 	$games = hbch_last_games( $req )->get_data();
 
-	if ( $atts['layout'] === 'table' ) {
+	if ( $layout === 'table' ) {
 		return hbch_render_games_table_last( $games, 'hbch-club-games-last' );
 	}
 
@@ -410,6 +446,14 @@ add_shortcode( 'hbch_home_last_games', function ( $atts ) {
 	}
 
 	return '<table class="hbch-home-games-last hbch-table-plain"><tbody>' . $rows . '</tbody></table>';
+}
+
+/**
+ * [hbch_home_last_games limit="3" exclude="text" layout="cards|table"]
+ */
+add_shortcode( 'hbch_home_last_games', function ( $atts ) {
+	$atts = shortcode_atts( [ 'limit' => '', 'exclude' => '', 'layout' => 'cards' ], $atts );
+	return hbch_render_home_last_games( $atts['limit'], $atts['exclude'], $atts['layout'] );
 } );
 
 /**
