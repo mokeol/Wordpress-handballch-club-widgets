@@ -290,9 +290,20 @@ function hbch_team_name_markup( $full, $short, $use_short_on_mobile ) {
  * Sortiert Spiele nach Datum und Uhrzeit. $desc = true: neueste zuerst.
  */
 function hbch_sort_games_by_datetime( $games, $desc = false ) {
+	static $tz = null;
+	if ( $tz === null ) {
+		$tz = new DateTimeZone( 'Europe/Zurich' );
+	}
+
 	$decorated = [];
 	foreach ( $games as $game ) {
-		$decorated[] = [ strtotime( $game['gameDateTime'] ?? '' ), $game ];
+		$raw = $game['gameDateTime'] ?? '';
+		try {
+			$ts = $raw !== '' ? ( new DateTime( $raw, $tz ) )->getTimestamp() : 0;
+		} catch ( Exception $e ) {
+			$ts = 0;
+		}
+		$decorated[] = [ $ts, $game ];
 	}
 	usort( $decorated, function ( $a, $b ) use ( $desc ) {
 		$cmp = $a[0] <=> $b[0];
