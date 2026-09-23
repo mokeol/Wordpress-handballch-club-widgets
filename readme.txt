@@ -116,6 +116,11 @@ No, it is built for the API of the Swiss Handball Federation.
 
 == Changelog ==
 
+= 1.0.2 =
+* Fixed timezone-inconsistent sorting of game lists (standings, fixtures, ICS export).
+* Added nonce protection to the "load teams"/"check team IDs" admin actions.
+* Added a daily cleanup job for the local logo cache to prevent unbounded disk growth.
+* Removed unused parameters left over from earlier refactors.
 = 1.0.1 =
 * Layout of the club-wide "latest results" widget: date and spectators on one line, team columns of equal width.
 
