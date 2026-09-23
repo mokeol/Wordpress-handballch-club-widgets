@@ -31,6 +31,24 @@ function hbch_settings_url( $tab = '' ) {
 	return admin_url( $tab !== '' ? $url . '&tab=' . $tab : $url );
 }
 
+/**
+ * URL der aktuellen Admin-Seite mit Zusatzparameter $arg und Nonce. Für
+ * Aktionen, die per Link (GET) einen API-Request auslösen. Jede Aktion hat
+ * einen eigenen Nonce-Parameter, damit sich zwei Aktionen in der URL nicht
+ * gegenseitig ungültig machen.
+ */
+function hbch_nonce_action_url( $arg, $action, $nonce_param ) {
+	return wp_nonce_url( add_query_arg( $arg, '1' ), $action, $nonce_param );
+}
+
+/**
+ * Prüft den Nonce einer per Link ausgelösten Aktion.
+ */
+function hbch_verify_action_nonce( $nonce_param, $action ) {
+	return isset( $_GET[ $nonce_param ] )
+		&& wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET[ $nonce_param ] ) ), $action );
+}
+
 function hbch_get_preview_team_slug() {
 	$teams = hbch_get_setting( 'teams' );
 	if ( empty( $teams ) ) {
@@ -95,7 +113,8 @@ function hbch_render_color_field( $role_id ) {
 /**
  * UI "Teams von handball.ch laden" (Reiter Allgemein & API). Liest
  * /clubs/{id}/teams live (kein Cache) und schlägt slug=ID-Zeilen vor, die
- * sich per Klick ins Feld "Teams" oben einfügen lassen.
+ * sich per Klick ins Feld "Teams" oben einfügen lassen. Der Live-Request
+ * läuft nur mit gültigem Nonce.
  */
 function hbch_render_teams_discover_ui() {
 	$club_id = (int) hbch_get_setting( 'club_id' );
@@ -107,11 +126,16 @@ function hbch_render_teams_discover_ui() {
 		return;
 	}
 
+	$discover_url = esc_url( hbch_nonce_action_url( 'hbch_discover_teams', 'hbch_discover_teams', '_hbch_discover_nonce' ) );
+
 	if ( ! isset( $_GET['hbch_discover_teams'] ) ) {
-		printf(
-			'<a href="%s" class="button button-secondary">Teams von handball.ch laden</a>',
-			esc_url( add_query_arg( 'hbch_discover_teams', '1' ) )
-		);
+		printf( '<a href="%s" class="button button-secondary">Teams von handball.ch laden</a>', $discover_url );
+		return;
+	}
+
+	if ( ! hbch_verify_action_nonce( '_hbch_discover_nonce', 'hbch_discover_teams' ) ) {
+		echo '<p><em>Sicherheitsprüfung fehlgeschlagen – Link erneut anklicken.</em></p>';
+		printf( '<a href="%s" class="button button-secondary">Teams von handball.ch laden</a>', $discover_url );
 		return;
 	}
 
@@ -119,7 +143,7 @@ function hbch_render_teams_discover_ui() {
 
 	if ( isset( $result['error'] ) ) {
 		printf( '<div class="notice notice-error inline"><p>%s</p></div>', esc_html( $result['error'] ) );
-		printf( '<p><a href="%s" class="button button-secondary">Erneut versuchen</a></p>', esc_url( add_query_arg( 'hbch_discover_teams', '1' ) ) );
+		printf( '<p><a href="%s" class="button button-secondary">Erneut versuchen</a></p>', $discover_url );
 		return;
 	}
 
@@ -159,7 +183,7 @@ function hbch_render_teams_discover_ui() {
 	echo '</tbody></table>';
 
 	printf( '<button type="button" id="hbch-discover-apply" class="button button-primary">Alle oben ins Team-Feld einfügen</button> ' );
-	printf( '<a href="%s" class="button button-secondary">Neu laden</a>', esc_url( add_query_arg( 'hbch_discover_teams', '1' ) ) );
+	printf( '<a href="%s" class="button button-secondary">Neu laden</a>', $discover_url );
 
 	printf(
 		'<script>
@@ -721,16 +745,22 @@ add_action( 'admin_init', function () {
 		);
 
 		if ( ! empty( $teams ) ) {
-			if ( isset( $_GET['hbch_check_teams'] ) ) {
+			$check_requested = isset( $_GET['hbch_check_teams'] );
+			$check_allowed   = $check_requested && hbch_verify_action_nonce( '_hbch_check_nonce', 'hbch_check_teams' );
+
+			if ( $check_allowed ) {
 				hbch_render_team_check_table( hbch_validate_all_teams(), true );
 				printf(
 					'<p class="description">Ausführlicher (inkl. Neu-Abruf ohne Cache) im Reiter "Diagnose". <a href="%s">Prüfung wieder ausblenden</a>.</p>',
-					esc_url( remove_query_arg( 'hbch_check_teams' ) )
+					esc_url( remove_query_arg( [ 'hbch_check_teams', '_hbch_check_nonce' ] ) )
 				);
 			} else {
+				if ( $check_requested ) {
+					echo '<p><em>Sicherheitsprüfung fehlgeschlagen – Link erneut anklicken.</em></p>';
+				}
 				printf(
 					'<p class="description" style="margin-top:0.75em;"><a href="%s" class="button button-secondary">Alle Team-IDs jetzt prüfen</a> — ruft alle eingetragenen Teams gegen die API ab (bei kaltem Cache kann das ein paar Sekunden dauern). Ausführlicher im Reiter "Diagnose".</p>',
-					esc_url( add_query_arg( 'hbch_check_teams', '1' ) )
+					esc_url( hbch_nonce_action_url( 'hbch_check_teams', 'hbch_check_teams', '_hbch_check_nonce' ) )
 				);
 			}
 		}
