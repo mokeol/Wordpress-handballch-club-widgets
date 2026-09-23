@@ -4,6 +4,15 @@ Die Versionshistorie steht in dieser Datei; der Reiter „Changelog“ im Adminp
 Bei jedem Release: Header-Version **und** Konstante `HBCH_VERSION` in `handballch-api.php` gemeinsam anpassen.
 Der Dateiname muss exakt `CHANGELOG.md` lauten (auf Linux-Servern case-sensitive).
 
+## 1.0.2 — Fehlerbehebungen & Aufräumen
+- Sortierung von Spiellisten (Rangliste/Spielpläne/ICS) nutzt jetzt konsequent `Europe/Zurich` statt der
+  Server-Standardzeitzone (konnte rund um die Zeitumstellung zu falscher Reihenfolge führen).
+- Admin-Aktionen „Teams von handball.ch laden“ und „Alle Team-IDs jetzt prüfen“ (Reiter „Allgemein & API“)
+  sind jetzt per Nonce abgesichert.
+- Neuer täglicher Aufräum-Job entfernt veraltete Dateien aus `uploads/hbch-logo-cache/` (bisher unbegrenztes
+  Wachstum, z. B. nach Team-ID-Wechsel pro Saison).
+- Toten Code entfernt: ungenutzter `$club_id`-Parameter in `hbch_ics_fetch_games()`, ungenutzter
+  `$mode`-Parameter bei den Logo-Funktionen (Überbleibsel der entfernten `loading="lazy"`-Logik).
 ## 1.0.1 — Layout „Vereinsweit – letzte Resultate“
 - `[hbch_home_last_games]` / Block „Vereinsweit – letzte Resultate“: Datum und Zuschauerzahl stehen auf einer Zeile
   (auf schmalen Bildschirmen untereinander).
