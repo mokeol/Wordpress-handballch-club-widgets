@@ -140,9 +140,9 @@ function hbch_render_games_table_next( array $games, $table_id ) {
 			</tr>',
 			esc_html( $g['gameDateTime'] ?? '' ),
 			esc_html( $g['gameStatus'] ?? '' ),
-			hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-sm', 'eager', 60, $dual_logo, 50 ),
+			hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ),
 			hbch_team_name_markup( $g['teamAName'] ?? '', $g['teamANameShort'] ?? '', $short_names ),
-			hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-sm', 'eager', 60, $dual_logo, 50 ),
+			hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ),
 			hbch_team_name_markup( $g['teamBName'] ?? '', $g['teamBNameShort'] ?? '', $short_names ),
 			$venue_html,
 			$link_html
@@ -202,13 +202,13 @@ function hbch_render_games_table_last( array $games, $table_id ) {
 			</tr>',
 			esc_html( $g['gameDateTime'] ?? '' ),
 			esc_html( $g['gameStatus'] ?? '' ),
-			hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-sm', 'eager', 60, $dual_logo, 50 ),
+			hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ),
 			hbch_team_name_markup( $g['teamAName'] ?? '', $g['teamANameShort'] ?? '', $short_names ),
 			esc_html( $g['teamAScoreFT'] ?? '' ),
 			esc_html( $g['teamBScoreFT'] ?? '' ),
 			esc_html( $g['teamAScoreHT'] ?? '' ),
 			esc_html( $g['teamBScoreHT'] ?? '' ),
-			hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-sm', 'eager', 60, $dual_logo, 50 ),
+			hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ),
 			hbch_team_name_markup( $g['teamBName'] ?? '', $g['teamBNameShort'] ?? '', $short_names ),
 			$venue_html,
 			$spectators_txt,
@@ -336,11 +336,11 @@ function hbch_render_home_next_games( $limit = '', $exclude = '', $layout = 'car
 			</tr>',
 			esc_html( $g['gameDateTime'] ?? '' ),
 			esc_html( $g['gameStatus'] ?? '' ),
-			hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-score', 'lazy', 90, $dual_logo ),
+			hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-score', 90, $dual_logo ),
 			$name_a,
 			esc_html( $g['leagueShort'] ?? '' ),
 			$venue_html,
-			hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-score', 'lazy', 90, $dual_logo ),
+			hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-score', 90, $dual_logo ),
 			$name_b,
 			$mobile_class
 		);
@@ -432,14 +432,14 @@ function hbch_render_home_last_games( $limit = '', $exclude = '', $layout = 'car
 			</tr>',
 			esc_html( $g['gameDateTime'] ?? '' ),
 			esc_html( $g['gameStatus'] ?? '' ),
-			hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-score', 'lazy', 90, $dual_logo ),
+			hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-score', 90, $dual_logo ),
 			$name_a,
 			esc_html( $g['leagueShort'] ?? '' ),
 			esc_html( $g['teamAScoreFT'] ?? '' ),
 			esc_html( $g['teamBScoreFT'] ?? '' ),
 			$spect_html,
 			$venue_html,
-			hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-score', 'lazy', 90, $dual_logo ),
+			hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-score', 90, $dual_logo ),
 			$name_b,
 			$mobile_class
 		);
@@ -482,8 +482,8 @@ add_shortcode( 'hbch_next_game', function ( $atts ) {
 	$show_logos = ! empty( $cf['logos']['enabled'] );
 	$dual_logo  = ! empty( $cf['dual_logo']['enabled'] );
 
-	$logo_a = $show_logos ? hbch_team_logo_markup( $game['teamAName'] ?? '', $game['teamAId'] ?? '', $game['clubTeamAId'] ?? '', 'hbch-team-logo-sm', 'eager', 60, $dual_logo, 50 ) . ' ' : '';
-	$logo_b = $show_logos ? hbch_team_logo_markup( $game['teamBName'] ?? '', $game['teamBId'] ?? '', $game['clubTeamBId'] ?? '', 'hbch-team-logo-sm', 'eager', 60, $dual_logo, 50 ) . ' ' : '';
+	$logo_a = $show_logos ? hbch_team_logo_markup( $game['teamAName'] ?? '', $game['teamAId'] ?? '', $game['clubTeamAId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ) . ' ' : '';
+	$logo_b = $show_logos ? hbch_team_logo_markup( $game['teamBName'] ?? '', $game['teamBId'] ?? '', $game['clubTeamBId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ) . ' ' : '';
 
 	// gameDateTime ist naive Schweizer Ortszeit: serverseitig nach UTC umrechnen,
 	// sonst läuft der Countdown im Sommer 2h, im Winter 1h falsch.
