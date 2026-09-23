@@ -919,3 +919,29 @@ function hbch_download_logo_file( $remote_url ) {
 	}
 }
 add_action( 'hbch_download_logo', 'hbch_download_logo_file' );
+// includes/api.php, am Ende der Datei
+add_action( 'hbch_cleanup_logo_cache', function () {
+	$upload_dir = wp_upload_dir();
+	$cache_dir  = $upload_dir['basedir'] . '/hbch-logo-cache';
+	if ( ! is_dir( $cache_dir ) ) {
+		return;
+	}
+	$max_age = max( 1, (int) hbch_get_setting( 'logo_cache_days' ) ) * 2 * DAY_IN_SECONDS;
+	foreach ( glob( trailingslashit( $cache_dir ) . '*.png' ) ?: [] as $file ) {
+		if ( is_file( $file ) && ( time() - filemtime( $file ) ) > $max_age ) {
+			@unlink( $file );
+		}
+	}
+} );
+// handballch-api.php
+function hbch_activate() {
+	hbch_ics_register_rewrite_rule();
+	flush_rewrite_rules();
+	if ( ! wp_next_scheduled( 'hbch_cleanup_logo_cache' ) ) {
+		wp_schedule_event( time(), 'daily', 'hbch_cleanup_logo_cache' );
+	}
+}
+function hbch_deactivate() {
+	flush_rewrite_rules();
+	wp_clear_scheduled_hook( 'hbch_cleanup_logo_cache' );
+}
