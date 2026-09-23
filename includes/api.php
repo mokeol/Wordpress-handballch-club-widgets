@@ -633,9 +633,14 @@ function hbch_rank_zone_class( $rank, $group ) {
 
 /**
  * Zeilen der detaillierten Rangliste für [hbch_team_ranking] (mit Logos).
+ *
+ * $show_zones = false: Rang-Badge bleibt immer grau, ohne Auf-/Abstiegsfarbe
+ * (z. B. wenn der Block "Auf-/Abstiegszonen farbig markieren" abgewählt
+ * hat). Eigener Cache-Eintrag pro Variante, damit beide unabhängig
+ * zwischengespeichert werden.
  */
-function hbch_fetch_team_ranking_rows( $team_id ) {
-	$cache_key = 'hbch_team_ranking_' . $team_id;
+function hbch_fetch_team_ranking_rows( $team_id, $show_zones = true ) {
+	$cache_key = 'hbch_team_ranking_' . $team_id . ( $show_zones ? '' : '_nozones' );
 	$rows      = get_transient( $cache_key );
 
 	if ( $rows !== false ) {
@@ -655,7 +660,7 @@ function hbch_fetch_team_ranking_rows( $team_id ) {
 			$data = $group['ranking'] ?? [];
 			if ( ! empty( $data ) && is_array( $data ) ) {
 				foreach ( $data as $t ) {
-					$zone_class = hbch_rank_zone_class( $t['rank'] ?? 0, $group );
+					$zone_class = $show_zones ? hbch_rank_zone_class( $t['rank'] ?? 0, $group ) : '';
 					$rank_cell  = sprintf( '<td class="hbch-rank-cell"><span class="hbch-rank-badge %s">%s</span></td>', esc_attr( $zone_class ), esc_html( $t['rank'] ?? '' ) );
 					$team_cell  = sprintf(
 						'<td>%s %s</td>',
