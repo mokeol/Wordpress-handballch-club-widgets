@@ -1,10 +1,16 @@
 /**
- * Editor-Ansicht der 8 Blöcke aus includes/blocks.php (ohne Build-Schritt).
+ * Editor-Ansicht der Blöcke aus includes/blocks.php (ohne Build-Schritt).
  * Alle Blöcke sind dynamisch (kein save()); das Markup kommt per
- * Server-Side-Render, identisch zu den Shortcodes.
+ * Server-Side-Render, gebaut von denselben Render-Funktionen wie die
+ * Shortcodes (siehe shortcodes.php).
  *
- * Jeder Block hat ein Panel "Farben", das die globalen Farben nur für diesen
- * Block überschreibt. Die Farbliste kommt aus PHP
+ * "Rangliste" hat eine Checkbox "Detailliert" (kompakt/detailliert) und,
+ * wenn detailliert aktiv ist, zusätzlich "Auf-/Abstiegszonen farbig
+ * markieren". "Team – Spielplan" und "Verein – Spielplan" haben je zwei
+ * unabhängige Checkboxen ("Nächste Spiele" / "Resultate").
+ *
+ * Jeder Block hat ausserdem ein Panel "Farben", das die globalen Farben nur
+ * für diesen Block überschreibt. Die Farbliste kommt aus PHP
  * (handballchApiBlocksData.blockColors), damit Attribute und Panel nie
  * auseinanderlaufen.
  */
@@ -19,6 +25,7 @@
 	var Button = components.Button;
 	var SelectControl = components.SelectControl;
 	var TextControl = components.TextControl;
+	var CheckboxControl = components.CheckboxControl;
 	var Notice = components.Notice;
 	var Placeholder = components.Placeholder;
 
@@ -42,7 +49,7 @@
 
 	// "cards" = Startseiten-Kartenlook (Default), "table" = Team-Spielplan-
 	// Tabellenlook (z. B. für die Gesamtspielplan-Seite). Siehe layout-Attribut
-	// bei [hbch_home_next_games]/[hbch_home_last_games].
+	// bei handballch/home-games.
 	var layoutOptions = [
 		{ label: __( 'Karten (wie Startseite)', 'handballch-api' ), value: 'cards' },
 		{ label: __( 'Tabelle (wie Team-Spielplan)', 'handballch-api' ), value: 'table' },
@@ -108,12 +115,149 @@
 		);
 	}
 
+	// Panel "Anzeige" für Team-/Vereins-Spielplan: zwei unabhängige
+	// Checkboxen ("Nächste Spiele" / "Resultate").
+	function renderGamesShowPanel( attributes, setAttributes ) {
+		return el( PanelBody, { title: __( 'Anzeige', 'handballch-api' ) },
+			el( CheckboxControl, {
+				label: __( 'Nächste Spiele', 'handballch-api' ),
+				checked: !! attributes.show_next,
+				onChange: function ( value ) { setAttributes( { show_next: value } ); },
+			} ),
+			el( CheckboxControl, {
+				label: __( 'Resultate', 'handballch-api' ),
+				checked: !! attributes.show_last,
+				onChange: function ( value ) { setAttributes( { show_last: value } ); },
+			} ),
+			( ! attributes.show_next && ! attributes.show_last )
+				? el( Notice, { status: 'warning', isDismissible: false }, __( 'Nichts ausgewählt — der Block bleibt leer.', 'handballch-api' ) )
+				: null
+		);
+	}
+
 	// --- Blöcke -----------------------------------------------------------
 
-	function registerTeamBlock( name, title, description, icon ) {
+	// "Rangliste": Team-Auswahl, Checkbox "Detailliert" und (nur wenn
+	// detailliert aktiv) Checkbox "Auf-/Abstiegszonen farbig markieren".
+	( function () {
+		var name = 'handballch/ranking';
+		var title = __( 'handball.ch: Rangliste', 'handballch-api' );
+		var icon = 'chart-bar';
+
 		blocks.registerBlockType( name, {
 			title: title,
-			description: description,
+			description: __( 'Kompakte oder detaillierte Rangliste für ein Team, mit optionaler Zonenfärbung.', 'handballch-api' ),
+			category: 'handballch-api',
+			icon: icon,
+			attributes: withColorAttributes( name, {
+				team: { type: 'string', default: '' },
+				detailed: { type: 'boolean', default: false },
+				show_zones: { type: 'boolean', default: true },
+			} ),
+			edit: function ( props ) {
+				var blockProps = useBlockProps();
+				var attributes = props.attributes;
+				var setAttributes = props.setAttributes;
+
+				if ( teamSlugs.length === 0 ) {
+					return el( 'div', blockProps, el( Placeholder, { icon: icon, label: title }, renderNoTeamsNotice() ) );
+				}
+
+				return el( 'div', blockProps,
+					el( InspectorControls, {},
+						el( PanelBody, { title: __( 'Team', 'handballch-api' ) },
+							el( SelectControl, {
+								label: __( 'Team', 'handballch-api' ),
+								value: attributes.team,
+								options: teamOptions( __( '— bitte wählen —', 'handballch-api' ) ),
+								onChange: function ( value ) { setAttributes( { team: value } ); },
+								help: __( 'Weitere Teams: Einstellungen → handball.ch Club-Widgets → „Allgemein & API“.', 'handballch-api' ),
+							} )
+						),
+						el( PanelBody, { title: __( 'Anzeige', 'handballch-api' ) },
+							el( CheckboxControl, {
+								label: __( 'Detaillierte Rangliste (Logo, S/U/N, Tore)', 'handballch-api' ),
+								checked: !! attributes.detailed,
+								onChange: function ( value ) { setAttributes( { detailed: value } ); },
+								help: __( 'Unbestimmt = kompakte Rangliste (Platz, Team, Spiele, Punkte).', 'handballch-api' ),
+							} ),
+							attributes.detailed
+								? el( CheckboxControl, {
+									label: __( 'Auf-/Abstiegszonen farbig markieren', 'handballch-api' ),
+									checked: !! attributes.show_zones,
+									onChange: function ( value ) { setAttributes( { show_zones: value } ); },
+									help: __( 'Färbt das Rang-Badge nach Auf-/Abstiegszone (Farben im Reiter „Farben“).', 'handballch-api' ),
+								} )
+								: null
+						),
+						renderColorPanel( name, attributes, setAttributes )
+					),
+					attributes.team
+						? el( serverSideRender, { block: name, attributes: attributes } )
+						: el( Placeholder, { icon: icon, label: title }, __( 'Bitte in der Seitenleiste rechts ein Team auswählen.', 'handballch-api' ) )
+				);
+			},
+			save: function () { return null; },
+		} );
+	} )();
+
+	// "Team – Spielplan": Team-Auswahl + Checkboxen "Nächste Spiele"/"Resultate".
+	( function () {
+		var name = 'handballch/team-games';
+		var title = __( 'handball.ch: Team – Spielplan', 'handballch-api' );
+		var icon = 'calendar-alt';
+
+		blocks.registerBlockType( name, {
+			title: title,
+			description: __( 'Nächste Spiele und/oder Resultate eines Teams, per Checkbox wählbar.', 'handballch-api' ),
+			category: 'handballch-api',
+			icon: icon,
+			attributes: withColorAttributes( name, {
+				team: { type: 'string', default: '' },
+				show_next: { type: 'boolean', default: true },
+				show_last: { type: 'boolean', default: true },
+			} ),
+			edit: function ( props ) {
+				var blockProps = useBlockProps();
+				var attributes = props.attributes;
+				var setAttributes = props.setAttributes;
+
+				if ( teamSlugs.length === 0 ) {
+					return el( 'div', blockProps, el( Placeholder, { icon: icon, label: title }, renderNoTeamsNotice() ) );
+				}
+
+				return el( 'div', blockProps,
+					el( InspectorControls, {},
+						el( PanelBody, { title: __( 'Team', 'handballch-api' ) },
+							el( SelectControl, {
+								label: __( 'Team', 'handballch-api' ),
+								value: attributes.team,
+								options: teamOptions( __( '— bitte wählen —', 'handballch-api' ) ),
+								onChange: function ( value ) { setAttributes( { team: value } ); },
+								help: __( 'Weitere Teams: Einstellungen → handball.ch Club-Widgets → „Allgemein & API“.', 'handballch-api' ),
+							} )
+						),
+						renderGamesShowPanel( attributes, setAttributes ),
+						renderColorPanel( name, attributes, setAttributes )
+					),
+					attributes.team
+						? el( serverSideRender, { block: name, attributes: attributes } )
+						: el( Placeholder, { icon: icon, label: title }, __( 'Bitte in der Seitenleiste rechts ein Team auswählen.', 'handballch-api' ) )
+				);
+			},
+			save: function () { return null; },
+		} );
+	} )();
+
+	// "Countdown (nächstes Spiel)": nur Team-Auswahl, keine Anzeige-Checkboxen.
+	( function () {
+		var name = 'handballch/next-game';
+		var title = __( 'handball.ch: Countdown (nächstes Spiel)', 'handballch-api' );
+		var icon = 'clock';
+
+		blocks.registerBlockType( name, {
+			title: title,
+			description: __( 'Nächstes Spiel eines Teams mit Live-Countdown.', 'handballch-api' ),
 			category: 'handballch-api',
 			icon: icon,
 			attributes: withColorAttributes( name, { team: { type: 'string', default: '' } } ),
@@ -146,24 +290,23 @@
 			},
 			save: function () { return null; },
 		} );
-	}
+	} )();
 
-	registerTeamBlock( 'handballch/ranking', __( 'handball.ch: Rangliste (kompakt)', 'handballch-api' ), __( 'Kompakte Rangliste für ein Team.', 'handballch-api' ), 'editor-ol' );
-	registerTeamBlock( 'handballch/team-ranking', __( 'handball.ch: Rangliste (detailliert)', 'handballch-api' ), __( 'Detaillierte Rangliste mit Logo, S/U/N und Toren.', 'handballch-api' ), 'chart-bar' );
-	registerTeamBlock( 'handballch/team-next-games', __( 'handball.ch: Team-Spielplan – nächste Spiele', 'handballch-api' ), __( 'Noch ausstehende Spiele eines Teams.', 'handballch-api' ), 'calendar-alt' );
-	registerTeamBlock( 'handballch/team-last-games', __( 'handball.ch: Team-Spielplan – letzte Resultate', 'handballch-api' ), __( 'Bereits gespielte Spiele eines Teams mit Resultat.', 'handballch-api' ), 'awards' );
-	registerTeamBlock( 'handballch/next-game', __( 'handball.ch: Countdown (nächstes Spiel)', 'handballch-api' ), __( 'Nächstes Spiel eines Teams mit Live-Countdown.', 'handballch-api' ), 'clock' );
+	// "Verein – Spielplan": Layout, Anzahl, Ausschluss + Checkboxen.
+	( function () {
+		var name = 'handballch/home-games';
 
-	function registerHomeBlock( name, title, description, icon ) {
 		blocks.registerBlockType( name, {
-			title: title,
-			description: description,
+			title: __( 'handball.ch: Verein – Spielplan', 'handballch-api' ),
+			description: __( 'Nächste Spiele und/oder Resultate über alle Teams, per Checkbox wählbar.', 'handballch-api' ),
 			category: 'handballch-api',
-			icon: icon,
+			icon: 'calendar',
 			attributes: withColorAttributes( name, {
 				limit: { type: 'string', default: '' },
 				exclude: { type: 'string', default: '' },
 				layout: { type: 'string', default: 'cards' },
+				show_next: { type: 'boolean', default: true },
+				show_last: { type: 'boolean', default: true },
 			} ),
 			edit: function ( props ) {
 				var blockProps = useBlockProps();
@@ -186,7 +329,7 @@
 								min: 1,
 								value: attributes.limit,
 								placeholder: String( data.defaultGamesLimit || 3 ),
-								help: __( 'Leer lassen für die Standard-Anzahl aus den Einstellungen (Reiter „Vereins-Spielplan“).', 'handballch-api' ),
+								help: __( 'Leer lassen für die Standard-Anzahl aus den Einstellungen (Reiter „Vereins-Spielplan“). Gilt für „Nächste Spiele“ und „Resultate“ gleichermassen.', 'handballch-api' ),
 								onChange: function ( value ) { setAttributes( { limit: value } ); },
 							} ),
 							el( TextControl, {
@@ -197,6 +340,7 @@
 								onChange: function ( value ) { setAttributes( { exclude: value } ); },
 							} )
 						),
+						renderGamesShowPanel( attributes, setAttributes ),
 						renderColorPanel( name, attributes, setAttributes )
 					),
 					el( serverSideRender, { block: name, attributes: attributes } )
@@ -204,10 +348,7 @@
 			},
 			save: function () { return null; },
 		} );
-	}
-
-	registerHomeBlock( 'handballch/home-next-games', __( 'handball.ch: Vereinsweit – nächste Spiele', 'handballch-api' ), __( 'Kommende Spiele über alle Teams.', 'handballch-api' ), 'calendar' );
-	registerHomeBlock( 'handballch/home-last-games', __( 'handball.ch: Vereinsweit – letzte Resultate', 'handballch-api' ), __( 'Letzte Resultate über alle Teams.', 'handballch-api' ), 'list-view' );
+	} )();
 
 	blocks.registerBlockType( 'handballch/ics-subscribe', {
 		title: __( 'handball.ch: Kalender abonnieren', 'handballch-api' ),
