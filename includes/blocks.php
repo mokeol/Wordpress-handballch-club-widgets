@@ -2,11 +2,19 @@
 /**
  * includes/blocks.php
  *
- * Gutenberg-Blöcke zu den Shortcodes. Jeder Block hat Farb-Attribute
- * (color_<rolle>), die als CSS-Variablen am Block-Wrapper gesetzt werden und
- * die globalen Farben nur für diesen Block überschreiben (Rollen pro Block:
- * hbch_block_color_roles() in colors.php). Die Shortcodes nutzen nur die
- * globalen Farben.
+ * Gutenberg-Blöcke. Jeder Block hat Farb-Attribute (color_<rolle>), die als
+ * CSS-Variablen am Block-Wrapper gesetzt werden und die globalen Farben nur
+ * für diesen Block überschreiben (Rollen pro Block: hbch_block_color_roles()
+ * in colors.php). Die Shortcodes nutzen nur die globalen Farben.
+ *
+ * "Rangliste", "Team – Spielplan" und "Verein – Spielplan" rufen die
+ * Render-Funktionen aus shortcodes.php direkt auf (kein do_shortcode()/
+ * Shortcode-Tag-Umweg) und bündeln mit Checkboxen, was frühere Einzelblöcke
+ * getrennt abdeckten:
+ *   - "Rangliste": kompakt ODER detailliert (eine Checkbox), bei detailliert
+ *     zusätzlich optional Auf-/Abstiegszonen farbig markieren.
+ *   - "Team – Spielplan" / "Verein – Spielplan": Nächste Spiele und/oder
+ *     Resultate (zwei unabhängige Checkboxen).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -33,6 +41,10 @@ function hbch_block_wrap( $inner_html, $style = '' ) {
 	return sprintf( '<div %s>%s</div>', get_block_wrapper_attributes( $extra ), $inner_html );
 }
 
+/**
+ * Für "Countdown" und "Kalender abonnieren": einfache 1:1-Blöcke, die
+ * weiterhin ihren jeweils einen Shortcode aufrufen.
+ */
 function hbch_block_render( $block_name, $shortcode, array $attributes, array $shortcode_atts ) {
 	return hbch_block_wrap(
 		hbch_block_render_shortcode( $shortcode, $shortcode_atts ),
@@ -58,49 +70,48 @@ function hbch_register_block( $name, $title, $description, $icon, array $attribu
 
 add_action( 'init', function () {
 
-	$team_attr = [ 'team' => [ 'type' => 'string', 'default' => '' ] ];
-
+	// "Rangliste": kompakt oder detailliert (Checkbox), bei detailliert
+	// zusätzlich optional die Auf-/Abstiegszonen farbig markieren.
 	hbch_register_block(
 		'handballch/ranking',
-		'Rangliste (kompakt)',
-		'Kompakte Rangliste (Platz, Team, Spiele, Punkte) für ein Team — entspricht [hbch_ranking].',
-		'editor-ol',
-		$team_attr,
-		function ( $attributes ) {
-			return hbch_block_render( 'handballch/ranking', 'hbch_ranking', $attributes, [ 'team' => $attributes['team'] ?? '' ] );
-		}
-	);
-
-	hbch_register_block(
-		'handballch/team-ranking',
-		'Rangliste (detailliert)',
-		'Detaillierte Rangliste mit Logo, S/U/N, Toren und Auf-/Abstiegszonen — entspricht [hbch_team_ranking].',
+		'Rangliste',
+		'Kompakte oder detaillierte Rangliste für ein Team, bei der detaillierten Variante mit optionaler Auf-/Abstiegszonen-Färbung.',
 		'chart-bar',
-		$team_attr,
+		[
+			'team'       => [ 'type' => 'string',  'default' => '' ],
+			'detailed'   => [ 'type' => 'boolean', 'default' => false ],
+			'show_zones' => [ 'type' => 'boolean', 'default' => true ],
+		],
 		function ( $attributes ) {
-			return hbch_block_render( 'handballch/team-ranking', 'hbch_team_ranking', $attributes, [ 'team' => $attributes['team'] ?? '' ] );
+			$team_id = hbch_get_team_id( $attributes['team'] ?? '' );
+			$html    = ! empty( $attributes['detailed'] )
+				? hbch_render_ranking_table_detailed( $team_id, ! empty( $attributes['show_zones'] ) )
+				: hbch_render_ranking_table_compact( $team_id );
+			return hbch_block_wrap( $html, hbch_block_color_style( $attributes, 'handballch/ranking' ) );
 		}
 	);
 
+	// "Team – Spielplan": Nächste Spiele und/oder Resultate eines Teams.
 	hbch_register_block(
-		'handballch/team-next-games',
-		'Team – nächste Spiele',
-		'Noch ausstehende Spiele eines Teams, aufsteigend sortiert — entspricht [hbch_team_next_games].',
+		'handballch/team-games',
+		'Team – Spielplan',
+		'Nächste Spiele und/oder Resultate eines Teams. Auswahl per Checkbox.',
 		'calendar-alt',
-		$team_attr,
+		[
+			'team'      => [ 'type' => 'string',  'default' => '' ],
+			'show_next' => [ 'type' => 'boolean', 'default' => true ],
+			'show_last' => [ 'type' => 'boolean', 'default' => true ],
+		],
 		function ( $attributes ) {
-			return hbch_block_render( 'handballch/team-next-games', 'hbch_team_next_games', $attributes, [ 'team' => $attributes['team'] ?? '' ] );
-		}
-	);
-
-	hbch_register_block(
-		'handballch/team-last-games',
-		'Team – Resultate',
-		'Bereits gespielte Spiele eines Teams mit Resultat, absteigend sortiert — entspricht [hbch_team_last_games].',
-		'awards',
-		$team_attr,
-		function ( $attributes ) {
-			return hbch_block_render( 'handballch/team-last-games', 'hbch_team_last_games', $attributes, [ 'team' => $attributes['team'] ?? '' ] );
+			$team_id = hbch_get_team_id( $attributes['team'] ?? '' );
+			$html    = '';
+			if ( ! empty( $attributes['show_next'] ) ) {
+				$html .= hbch_render_team_next_games( $team_id );
+			}
+			if ( ! empty( $attributes['show_last'] ) ) {
+				$html .= hbch_render_team_last_games( $team_id );
+			}
+			return hbch_block_wrap( $html, hbch_block_color_style( $attributes, 'handballch/team-games' ) );
 		}
 	);
 
@@ -109,47 +120,39 @@ add_action( 'init', function () {
 		'Countdown (nächstes Spiel)',
 		'Nächstes Spiel eines Teams mit live laufendem Countdown — entspricht [hbch_next_game]. Einstellungen im Reiter "Countdown".',
 		'clock',
-		$team_attr,
+		[ 'team' => [ 'type' => 'string', 'default' => '' ] ],
 		function ( $attributes ) {
 			return hbch_block_render( 'handballch/next-game', 'hbch_next_game', $attributes, [ 'team' => $attributes['team'] ?? '' ] );
 		}
 	);
 
-	// "layout": "cards" (Startseiten-Kartenlook, Default) oder "table"
-	// (Team-Spielplan-Tabellenlook, z. B. für die Gesamtspielplan-Seite).
-	$home_attrs = [
-		'limit'   => [ 'type' => 'string', 'default' => '' ],
-		'exclude' => [ 'type' => 'string', 'default' => '' ],
-		'layout'  => [ 'type' => 'string', 'default' => 'cards' ],
-	];
-
+	// "Verein – Spielplan": Nächste Spiele und/oder Resultate über alle
+	// Teams. "layout": "cards" (Startseiten-Kartenlook, Default) oder
+	// "table" (Team-Spielplan-Tabellenlook, z. B. für die Gesamtspielplan-Seite).
 	hbch_register_block(
-		'handballch/home-next-games',
-		'Verein – nächste Spiele',
-		'Kommende Spiele über alle Teams — entspricht [hbch_home_next_games]. Layout wählbar: Karten (Startseite) oder Tabelle (wie Team-Spielplan).',
+		'handballch/home-games',
+		'Verein – Spielplan',
+		'Nächste Spiele und/oder Resultate über alle Teams. Auswahl per Checkbox, Layout wählbar: Karten (Startseite) oder Tabelle (wie Team-Spielplan).',
 		'calendar',
-		$home_attrs,
+		[
+			'limit'     => [ 'type' => 'string',  'default' => '' ],
+			'exclude'   => [ 'type' => 'string',  'default' => '' ],
+			'layout'    => [ 'type' => 'string',  'default' => 'cards' ],
+			'show_next' => [ 'type' => 'boolean', 'default' => true ],
+			'show_last' => [ 'type' => 'boolean', 'default' => true ],
+		],
 		function ( $attributes ) {
-			return hbch_block_render( 'handballch/home-next-games', 'hbch_home_next_games', $attributes, [
-				'limit'   => $attributes['limit'] ?? '',
-				'exclude' => $attributes['exclude'] ?? '',
-				'layout'  => $attributes['layout'] ?? 'cards',
-			] );
-		}
-	);
-
-	hbch_register_block(
-		'handballch/home-last-games',
-		'Verein – letzte Resultate',
-		'Letzte Resultate über alle Teams — entspricht [hbch_home_last_games]. Layout wählbar: Karten (Startseite) oder Tabelle (wie Team-Spielplan).',
-		'list-view',
-		$home_attrs,
-		function ( $attributes ) {
-			return hbch_block_render( 'handballch/home-last-games', 'hbch_home_last_games', $attributes, [
-				'limit'   => $attributes['limit'] ?? '',
-				'exclude' => $attributes['exclude'] ?? '',
-				'layout'  => $attributes['layout'] ?? 'cards',
-			] );
+			$limit   = $attributes['limit'] ?? '';
+			$exclude = $attributes['exclude'] ?? '';
+			$layout  = $attributes['layout'] ?? 'cards';
+			$html    = '';
+			if ( ! empty( $attributes['show_next'] ) ) {
+				$html .= hbch_render_home_next_games( $limit, $exclude, $layout );
+			}
+			if ( ! empty( $attributes['show_last'] ) ) {
+				$html .= hbch_render_home_last_games( $limit, $exclude, $layout );
+			}
+			return hbch_block_wrap( $html, hbch_block_color_style( $attributes, 'handballch/home-games' ) );
 		}
 	);
 
