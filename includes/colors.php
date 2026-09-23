@@ -154,20 +154,21 @@ function hbch_colors_root_css( $pretty = false ) {
 }
 
 /**
- * Welche Farbrollen welcher Block anbietet.
+ * Welche Farbrollen welcher Block anbietet. "handballch/ranking" bündelt
+ * kompakte und detaillierte Variante (inkl. Zonenfarben, da die Zonen im
+ * Block optional zuschaltbar sind); "handballch/team-games" und
+ * "handballch/home-games" bündeln je die Rollen der früheren next-/last-
+ * Blöcke (Union, ohne Duplikate).
  */
 function hbch_block_color_roles() {
 	$zones = [ 'zone_promotion_direct', 'zone_promotion_candidate', 'zone_relegation_candidate', 'zone_relegation_direct' ];
 
 	return [
-		'handballch/ranking'         => [ 'accent', 'inverse', 'muted', 'line' ],
-		'handballch/team-ranking'    => array_merge( [ 'accent', 'inverse', 'muted', 'line' ], $zones ),
-		'handballch/team-next-games' => [ 'surface_alt', 'muted', 'inverse', 'live' ],
-		'handballch/team-last-games' => [ 'surface_alt', 'dark', 'inverse', 'muted' ],
-		'handballch/next-game'       => [ 'accent', 'muted' ],
-		'handballch/home-next-games' => [ 'accent', 'inverse', 'live' ],
-		'handballch/home-last-games' => [ 'accent' ],
-		'handballch/ics-subscribe'   => [ 'surface', 'line', 'surface_alt', 'dark' ],
+		'handballch/ranking'       => array_merge( [ 'accent', 'inverse', 'muted', 'line' ], $zones ),
+		'handballch/team-games'    => [ 'surface_alt', 'muted', 'inverse', 'live', 'dark' ],
+		'handballch/next-game'     => [ 'accent', 'muted' ],
+		'handballch/home-games'    => [ 'accent', 'inverse', 'live' ],
+		'handballch/ics-subscribe' => [ 'surface', 'line', 'surface_alt', 'dark' ],
 	];
 }
 
