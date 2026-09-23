@@ -675,7 +675,7 @@ function hbch_fetch_team_ranking_rows( $team_id, $show_zones = true ) {
 					$rank_cell  = sprintf( '<td class="hbch-rank-cell"><span class="hbch-rank-badge %s">%s</span></td>', esc_attr( $zone_class ), esc_html( $t['rank'] ?? '' ) );
 					$team_cell  = sprintf(
 						'<td>%s %s</td>',
-						hbch_team_logo_markup( $t['teamName'] ?? '', $t['teamId'] ?? '', $t['clubId'] ?? '', 'hbch-team-logo-sm', 'eager', 60, $dual_logo, 50 ),
+						hbch_team_logo_markup( $t['teamName'] ?? '', $t['teamId'] ?? '', $t['clubId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ),
 						esc_html( $t['teamName'] ?? '' )
 					);
 
@@ -842,10 +842,10 @@ function hbch_logo_url( $teamId, $clubId, $width = null ) {
 
 /**
  * Ein Logo-<img> mit festen width/height (verhindert Layout-Sprünge, CLS).
- * Kein loading="lazy": zusammen mit JS-Lazy-Load-Plugins lädt iOS Safari
- * die Bilder teils gar nicht nach. $mode bleibt als Parameter erhalten.
+ * Bewusst kein loading="lazy": zusammen mit JS-Lazy-Load-Plugins lädt
+ * iOS Safari die Bilder teils gar nicht nach.
  */
-function hbch_render_single_logo( $url, $css_class, $mode = 'eager', $width = null, $alt = '', $height = null ) {
+function hbch_render_single_logo( $url, $css_class, $width = null, $alt = '', $height = null ) {
 	$width  = (int) ( $width ?: 90 );
 	$height = (int) ( $height ?: $width );
 	return sprintf(
@@ -868,7 +868,7 @@ function hbch_render_single_logo( $url, $css_class, $mode = 'eager', $width = nu
  * handball.ch angeforderte Bildgrösse. $dual_enabled schaltet die
  * Doppel-Logo-Logik pro Widget.
  */
-function hbch_team_logo_markup( $team_name, $team_id, $club_id, $css_class, $mode = 'eager', $width = null, $dual_enabled = true, $height = null ) {
+function hbch_team_logo_markup( $team_name, $team_id, $club_id, $css_class, $width = null, $dual_enabled = true, $height = null ) {
 	$own_club_id = (int) hbch_get_setting( 'club_id' );
 	$match_text  = trim( (string) hbch_get_setting( 'highlight_own_team_text' ) );
 
@@ -883,11 +883,11 @@ function hbch_team_logo_markup( $team_name, $team_id, $club_id, $css_class, $mod
 		&& (int) $club_id !== 0;
 
 	if ( ! $is_joint_team_with_us ) {
-		return hbch_render_single_logo( hbch_logo_url( $team_id, $club_id, $width ), $css_class, $mode, $width, $alt, $height );
+		return hbch_render_single_logo( hbch_logo_url( $team_id, $club_id, $width ), $css_class, $width, $alt, $height );
 	}
 
-	$partner_logo = hbch_render_single_logo( hbch_logo_url( $team_id, $club_id, $width ), $css_class . ' hbch-team-logo-dual', $mode, $width, $alt, $height );
-	$own_logo     = hbch_render_single_logo( hbch_logo_url( 0, $own_club_id, $width ), $css_class . ' hbch-team-logo-dual', $mode, $width, $alt, $height );
+	$partner_logo = hbch_render_single_logo( hbch_logo_url( $team_id, $club_id, $width ), $css_class . ' hbch-team-logo-dual', $width, $alt, $height );
+	$own_logo     = hbch_render_single_logo( hbch_logo_url( 0, $own_club_id, $width ), $css_class . ' hbch-team-logo-dual', $width, $alt, $height );
 
 	return '<span class="hbch-team-logo-group">' . $partner_logo . $own_logo . '</span>';
 }
@@ -919,7 +919,12 @@ function hbch_download_logo_file( $remote_url ) {
 	}
 }
 add_action( 'hbch_download_logo', 'hbch_download_logo_file' );
-// includes/api.php, am Ende der Datei
+
+/**
+ * Täglicher Aufräum-Job (geplant in handballch-api.php): löscht Logo-Kopien,
+ * die älter als das Doppelte der Logo-Cache-Dauer sind (z. B. verwaiste
+ * Dateien nach einem Team-ID-Wechsel pro Saison).
+ */
 add_action( 'hbch_cleanup_logo_cache', function () {
 	$upload_dir = wp_upload_dir();
 	$cache_dir  = $upload_dir['basedir'] . '/hbch-logo-cache';
@@ -933,15 +938,3 @@ add_action( 'hbch_cleanup_logo_cache', function () {
 		}
 	}
 } );
-// handballch-api.php
-function hbch_activate() {
-	hbch_ics_register_rewrite_rule();
-	flush_rewrite_rules();
-	if ( ! wp_next_scheduled( 'hbch_cleanup_logo_cache' ) ) {
-		wp_schedule_event( time(), 'daily', 'hbch_cleanup_logo_cache' );
-	}
-}
-function hbch_deactivate() {
-	flush_rewrite_rules();
-	wp_clear_scheduled_hook( 'hbch_cleanup_logo_cache' );
-}
