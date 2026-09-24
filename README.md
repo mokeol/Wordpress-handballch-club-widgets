@@ -209,8 +209,7 @@ löscht sie sofort.
 | ICS-Kalender | 6 Stunden | Reiter ICS-Export |
 | Team-/Vereinslogos (lokale Kopie) | 30 Tage | Reiter Allgemein & API |
 
-Das fertige Ranglisten-HTML ist zusätzlich an eine Signatur der zugehörigen Einstellungen (Spalten, Doppel-Logo,
-Such-Text, Club-ID) gebunden: Ändert man eine davon, wird automatisch neu aufgebaut.
+Jeder Cache-Schlüssel enthält einen Versionszähler (hbch_cache_version). ‚Cache jetzt leeren‘ und das Speichern der Einstellungen zählen ihn hoch, auch mit Object-Cache. Pro Abruf wird eine letzte gute Kopie aufgehoben (7 Tage, Filter hbch_stale_cache_seconds); ein Fehler-Marker (60 s) verhindert blockierende Neuversuche. Das Ranglisten-HTML wird nicht separat gecacht.
 
 **Logos:** Beim ersten Aufruf wird die Original-URL von handball.ch ausgeliefert (kein Warten), ein einmaliger
 WP-Cron-Job lädt die Datei nach `uploads/hbch-logo-cache/`. Ab dem nächsten Aufruf kommt die lokale Kopie.
@@ -241,8 +240,8 @@ erzwingen, siehe [Filter & Hooks](#filter--hooks).
 - **Forfait:** Forfait-Spiele fehlen in den vereinsweiten Listen, im Countdown, im ICS-Kalender und in den
   REST-Antworten. Im Team-Spielplan stehen sie mit Datum und „Forfait“-Badge statt Datum/Uhrzeit.
 - **Matchcenter-Link:** Das Icon wird pro Seite einmal als SVG-`<symbol>` ausgegeben und pro Zeile referenziert.
-- **Datumsformat:** Die Server geben rohe ISO-Zeiten aus, das Frontend-JS formatiert sie im Browser
-  (`hbch-date-raw`/`hbch-time-raw`). Der Countdown rechnet die Schweizer Ortszeit serverseitig korrekt nach UTC um.
+- **Datumsformat:** Datum und Uhrzeit formatiert der Server (Europe/Zurich, deutsche Namen), ohne JavaScript.
+- Nur der Countdown zählt im Browser weiter (public.js).
 - **Strukturdaten (SEO):** Bei `[hbch_team_next_games]`, `[hbch_home_next_games]` und `[hbch_next_game]` wird pro Spiel
   ein schema.org-`SportsEvent` als JSON-LD ausgegeben. Spiele ohne Halle bekommen keine Strukturdaten (Pflichtfeld
   `location`). Optional mit `offers` (Eintrittspreis, Default 0 CHF = kostenlos). Alles im Reiter „Allgemein & API“
@@ -265,6 +264,8 @@ add_filter( 'hbch_live_game_duration_minutes', fn() => 100 );
 
 // Plugin-CSS/-JS auf jeder Seite laden, auch wenn der Shortcode nicht im Seiteninhalt steht.
 add_filter( 'hbch_force_assets', '__return_true' );
+
+add_filter( 'hbch_stale_cache_seconds', fn() => 3 * DAY_IN_SECONDS );
 ```
 
 Weitere Hooks:
@@ -314,6 +315,8 @@ handballch-api/
 └── assets/
     ├── css/public.css          Frontend-Styles (mit HBCH-TAB-Markern für die Referenzanzeige)
     ├── css/admin.css           Adminpanel und Block-Editor
+    ├── js/public.js
+    ├──  js/blocks-legacy.js
     └── js/blocks-editor.js     Editor-Ansicht der Blöcke (ohne Build-Schritt)
 ```
 
