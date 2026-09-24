@@ -35,6 +35,30 @@ function hbch_is_game_forfait( $game ) {
 }
 
 /**
+ * Anpfiff eines Spiels als DateTime (Europe/Zurich), oder null bei fehlendem
+ * bzw. ungültigem Datum. gameDateTime ist naive Schweizer Ortszeit. Der
+ * Helfer verhindert, dass ein einzelner kaputter API-Wert (Exception im
+ * DateTime-Konstruktor) die ganze Seite lahmlegt.
+ */
+function hbch_game_datetime( $game ) {
+	static $tz = null;
+	if ( $tz === null ) {
+		$tz = new DateTimeZone( 'Europe/Zurich' );
+	}
+
+	$raw = is_array( $game ) ? ( $game['gameDateTime'] ?? '' ) : '';
+	if ( ! is_string( $raw ) || $raw === '' ) {
+		return null;
+	}
+
+	try {
+		return new DateTime( $raw, $tz );
+	} catch ( Exception $e ) {
+		return null;
+	}
+}
+
+/**
  * Läuft das Spiel gerade? Die API liefert keinen "läuft"-Status, deshalb
  * zeitbasiert: Anpfiff liegt in der Vergangenheit, aber innerhalb der
  * angenommenen Spieldauer (Default 90 Minuten), und der Status ist nicht
@@ -315,6 +339,8 @@ function hbch_sort_games_by_datetime( $games, $desc = false ) {
 /**
  * Gecachter Fetch der Vereins-Spielliste (Startseite, Countdown, ICS, REST).
  * Ohne Quelle (keine Club-ID gesetzt) kommt eine leere Liste zurück.
+ * Anfragen mit Authorization-Header folgen keinen Weiterleitungen
+ * ("redirection" => 0), damit die Zugangsdaten nie an ein anderes Ziel gehen.
  */
 function hbch_fetch_club_games( $source ) {
 	static $request_cache = [];
@@ -332,9 +358,10 @@ function hbch_fetch_club_games( $source ) {
 	}
 
 	$response = wp_remote_get( $source, [
-		'timeout'   => 8,
-		'sslverify' => hbch_ssl_verify(),
-		'headers'   => hbch_api_auth_header(),
+		'timeout'     => 8,
+		'sslverify'   => hbch_ssl_verify(),
+		'redirection' => 0,
+		'headers'     => hbch_api_auth_header(),
 	] );
 
 	if ( is_wp_error( $response ) ) {
@@ -416,6 +443,22 @@ function hbch_ranking_column_cell( $key, array $t, $rank_cell_html = null, $team
 }
 
 /**
+ * Kurze Signatur aller Einstellungen, die das gecachte Ranglisten-HTML
+ * beeinflussen (Spalten, Doppel-Logo, Such-Text, Club-ID). Sie ist Teil des
+ * Cache-Schlüssels: Ändert man im Adminpanel eine dieser Einstellungen,
+ * entsteht automatisch ein neuer Cache-Eintrag, statt dass alte Zeilen mit
+ * neuer Kopfzeile kombiniert werden.
+ */
+function hbch_ranking_cache_signature() {
+	return substr( md5( (string) wp_json_encode( [
+		hbch_get_setting( 'ranking_columns' ),
+		hbch_get_setting( 'ranking_dual_logo_enabled' ),
+		hbch_get_setting( 'highlight_own_team_text' ),
+		hbch_get_setting( 'club_id' ),
+	] ) ), 0, 10 );
+}
+
+/**
  * Zeilen (<tr>) der kompakten Rangliste für [hbch_ranking].
  */
 function hbch_fetch_ranking_rows( $team_id ) {
@@ -424,7 +467,7 @@ function hbch_fetch_ranking_rows( $team_id ) {
 		return '<tr><td colspan="' . $colspan . '">' . esc_html( hbch_get_setting( 'text_ranking_unknown_team' ) ) . '</td></tr>';
 	}
 
-	$cache_key = 'hbch_ranking_' . $team_id;
+	$cache_key = 'hbch_ranking_' . $team_id . '_' . hbch_ranking_cache_signature();
 	$cached    = get_transient( $cache_key );
 	if ( $cached !== false ) {
 		return $cached;
@@ -471,10 +514,11 @@ function hbch_fetch_group_data( $team_id ) {
 		return $request_cache[ (string) $team_id ] = $cached;
 	}
 
-	$response = wp_remote_get( "https://clubapi.handball.ch/rest/v1/teams/{$team_id}/group", [
-		'timeout'   => 5,
-		'sslverify' => hbch_ssl_verify(),
-		'headers'   => hbch_api_auth_header(),
+	$response = wp_remote_get( 'https://clubapi.handball.ch/rest/v1/teams/' . (int) $team_id . '/group', [
+		'timeout'     => 5,
+		'sslverify'   => hbch_ssl_verify(),
+		'redirection' => 0,
+		'headers'     => hbch_api_auth_header(),
 	] );
 
 	if ( is_wp_error( $response ) ) {
@@ -569,11 +613,13 @@ function hbch_fetch_club_teams_live( $club_id ) {
 	if ( ! $club_id ) {
 		return [ 'error' => 'Keine Club-ID gesetzt.' ];
 	}
+	$club_id = (int) $club_id;
 
-	$response = wp_remote_get( "https://clubapi.handball.ch/rest/v1/clubs/{$club_id}/teams", [
-		'timeout'   => 8,
-		'sslverify' => hbch_ssl_verify(),
-		'headers'   => hbch_api_auth_header(),
+	$response = wp_remote_get( 'https://clubapi.handball.ch/rest/v1/clubs/' . $club_id . '/teams', [
+		'timeout'     => 8,
+		'sslverify'   => hbch_ssl_verify(),
+		'redirection' => 0,
+		'headers'     => hbch_api_auth_header(),
 	] );
 
 	if ( is_wp_error( $response ) ) {
@@ -651,7 +697,7 @@ function hbch_rank_zone_class( $rank, $group ) {
  * zwischengespeichert werden.
  */
 function hbch_fetch_team_ranking_rows( $team_id, $show_zones = true ) {
-	$cache_key = 'hbch_team_ranking_' . $team_id . ( $show_zones ? '' : '_nozones' );
+	$cache_key = 'hbch_team_ranking_' . $team_id . ( $show_zones ? '' : '_nozones' ) . '_' . hbch_ranking_cache_signature();
 	$rows      = get_transient( $cache_key );
 
 	if ( $rows !== false ) {
@@ -726,10 +772,11 @@ function hbch_fetch_team_games_raw( $team_id ) {
 		return $request_cache[ (string) $team_id ] = $cached;
 	}
 
-	$response = wp_remote_get( "https://clubapi.handball.ch/rest/v1/teams/{$team_id}/games", [
-		'timeout'   => 5,
-		'sslverify' => hbch_ssl_verify(),
-		'headers'   => hbch_api_auth_header(),
+	$response = wp_remote_get( 'https://clubapi.handball.ch/rest/v1/teams/' . (int) $team_id . '/games', [
+		'timeout'     => 5,
+		'sslverify'   => hbch_ssl_verify(),
+		'redirection' => 0,
+		'headers'     => hbch_api_auth_header(),
 	] );
 
 	if ( is_wp_error( $response ) ) {
@@ -756,14 +803,15 @@ function hbch_fetch_next_game( $team_id ) {
 	if ( ! $team_id ) {
 		return null;
 	}
+	$team_id = (int) $team_id;
 
 	$cache_key = 'hbch_next_game_' . $team_id;
 	$cached    = get_transient( $cache_key );
 	if ( $cached !== false ) {
 		$cache_still_valid = true;
-		if ( $cached && ! empty( $cached['gameDateTime'] ) ) {
-			$cached_kickoff = new DateTime( $cached['gameDateTime'], new DateTimeZone( 'Europe/Zurich' ) );
-			if ( $cached_kickoff < new DateTime( 'now', new DateTimeZone( 'Europe/Zurich' ) ) ) {
+		if ( $cached ) {
+			$cached_kickoff = hbch_game_datetime( $cached );
+			if ( $cached_kickoff && $cached_kickoff < new DateTime( 'now', new DateTimeZone( 'Europe/Zurich' ) ) ) {
 				$cache_still_valid = false;
 			}
 		}
@@ -777,18 +825,18 @@ function hbch_fetch_next_game( $team_id ) {
 		return null;
 	}
 
-	$tz  = new DateTimeZone( 'Europe/Zurich' );
-	$now = new DateTime( 'now', $tz );
+	$now = new DateTime( 'now', new DateTimeZone( 'Europe/Zurich' ) );
 
-	$games = array_filter( $games, function ( $g ) use ( $now, $tz, $team_id ) {
-		if ( empty( $g['gameDateTime'] ) ) {
+	$games = array_filter( $games, function ( $g ) use ( $now, $team_id ) {
+		// Ungültige oder fehlende Datumswerte der API überspringen (kein Fatal Error).
+		$game_date = hbch_game_datetime( $g );
+		if ( ! $game_date ) {
 			return false;
 		}
 		if ( (int) ( $g['teamAId'] ?? 0 ) !== $team_id && (int) ( $g['teamBId'] ?? 0 ) !== $team_id ) {
 			return false;
 		}
-		$gameDate = new DateTime( $g['gameDateTime'], $tz );
-		if ( $gameDate < $now ) {
+		if ( $game_date < $now ) {
 			return false;
 		}
 		if ( stripos( $g['gameStatus'] ?? '', 'Gespielt' ) !== false || hbch_is_game_forfait( $g ) ) {
@@ -811,9 +859,13 @@ function hbch_fetch_next_game( $team_id ) {
  * uploads/hbch-logo-cache/. Danach wird die lokale Kopie ausgeliefert.
  */
 function hbch_logo_url( $teamId, $clubId, $width = null ) {
+	// IDs kommen aus der API: als Zahlen erzwingen, bevor sie in die URL gehen.
+	$teamId = (int) $teamId;
+	$clubId = (int) $clubId;
+
 	$remote_url = "https://handball.ch/images/logo/{$teamId}.png?fallbackType=club&fallbackId={$clubId}";
 	if ( $width ) {
-		$remote_url .= "&width={$width}";
+		$remote_url .= '&width=' . (int) $width;
 	}
 
 	static $upload_dir = null;
@@ -894,8 +946,19 @@ function hbch_team_logo_markup( $team_name, $team_id, $club_id, $css_class, $wid
 
 /**
  * Logo-Download im Hintergrund (WP-Cron, ausgelöst durch hbch_logo_url()).
+ *
+ * Gehärtet: nur https://handball.ch/… wird geladen, und die Datei wird nur
+ * gespeichert, wenn der Inhalt wirklich ein Bild ist (PNG/JPEG/GIF/WebP).
  */
 function hbch_download_logo_file( $remote_url ) {
+	$parts = wp_parse_url( (string) $remote_url );
+	if (
+		empty( $parts['scheme'] ) || $parts['scheme'] !== 'https'
+		|| empty( $parts['host'] ) || $parts['host'] !== 'handball.ch'
+	) {
+		return;
+	}
+
 	$upload_dir = wp_upload_dir();
 	$cache_dir  = $upload_dir['basedir'] . '/hbch-logo-cache';
 
@@ -913,7 +976,8 @@ function hbch_download_logo_file( $remote_url ) {
 
 	if ( ! is_wp_error( $response ) && wp_remote_retrieve_response_code( $response ) === 200 ) {
 		$body = wp_remote_retrieve_body( $response );
-		if ( $body ) {
+		$info = $body !== '' ? @getimagesizefromstring( $body ) : false;
+		if ( $info && in_array( $info['mime'] ?? '', [ 'image/png', 'image/jpeg', 'image/gif', 'image/webp' ], true ) ) {
 			file_put_contents( $file_path, $body );
 		}
 	}
