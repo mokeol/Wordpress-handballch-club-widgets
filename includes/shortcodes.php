@@ -487,7 +487,10 @@ add_shortcode( 'hbch_next_game', function ( $atts ) {
 
 	$team_a     = esc_html( $game['teamAName'] ?? '' );
 	$team_b     = esc_html( $game['teamBName'] ?? '' );
-	$venue      = esc_html( $game['venue'] ?? '' );
+	// Roher Hallenname: er wird unten per wp_json_encode() als JS-String
+	// ausgegeben und per textContent gesetzt (kein esc_html/esc_js nötig,
+	// sonst erschiene ein "&" im Namen als "&amp;").
+	$venue      = (string) ( $game['venue'] ?? '' );
 	$cf         = hbch_get_setting( 'countdown_fields' );
 	$show_venue = ! empty( $cf['venue']['enabled'] );
 	$show_logos = ! empty( $cf['logos']['enabled'] );
@@ -505,6 +508,8 @@ add_shortcode( 'hbch_next_game', function ( $atts ) {
 	} catch ( Exception $e ) {
 		$game_utc_iso = esc_js( $game['gameDateTime'] );
 	}
+
+	$venue_json = wp_json_encode( $venue, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ) ?: '""';
 
 	ob_start();
 	?>
@@ -539,7 +544,7 @@ add_shortcode( 'hbch_next_game', function ( $atts ) {
 
 		var dateStr = dt.toLocaleDateString('de-CH', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Zurich' });
 		var timeStr = dt.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Zurich' });
-		el.querySelector('.hbch-next-game-datetext').textContent = dateStr + ' \u2022 ' + timeStr + ' Uhr'<?php echo $show_venue ? " + ' \\u2022 ' + '" . esc_js( $venue ) . "'" : ''; ?>;
+		el.querySelector('.hbch-next-game-datetext').textContent = dateStr + ' \u2022 ' + timeStr + ' Uhr'<?php echo $show_venue ? " + ' \\u2022 ' + " . $venue_json : ''; ?>;
 
 		var elDays  = el.querySelector('.hbch-next-game-days');
 		var elHours = el.querySelector('.hbch-next-game-hours');
