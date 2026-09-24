@@ -7,6 +7,9 @@
  * Die eigentliche Render-Logik steckt in benannten hbch_render_*-Funktionen,
  * die sowohl die Shortcodes als auch die Gutenberg-Blöcke (blocks.php)
  * direkt aufrufen — ohne Umweg über do_shortcode()/Shortcode-Tags.
+ *
+ * Datum und Uhrzeit werden serverseitig formatiert (hbch_format_game_date()/
+ * hbch_format_game_time() in api.php), es braucht dafür kein JavaScript.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -70,6 +73,15 @@ add_shortcode( 'hbch_team_ranking', function ( $atts ) {
 } );
 
 /**
+ * Spieldatum als Text; fällt auf den Rohwert der API zurück, wenn er sich
+ * nicht als Datum lesen lässt. Nicht escaped.
+ */
+function hbch_game_date_text( $game, $style = 'short' ) {
+	$text = hbch_format_game_date( $game, $style );
+	return $text !== '' ? $text : (string) ( $game['gameDateTime'] ?? '' );
+}
+
+/**
  * Tabelle "zu spielende Spiele" im Team-Spielplan-Format. Wird für die
  * Team-Ebene ([hbch_team_next_games] bzw. Block "Team – Spielplan") und die
  * Vereins-Ebene mit layout="table" verwendet (dann mit den Spielen des ganzen
@@ -105,53 +117,39 @@ function hbch_render_games_table_next( array $games, $table_id, $show_league = f
 		if ( $show_spect && isset( $g['spectators'] ) && $g['spectators'] > 0 ) {
 			$venue_html .= ' <span class="hbch-extra-info">· ' . esc_html( $g['spectators'] ) . ' ' . esc_html( $spect_label ) . ' (erwartet)</span>';
 		}
-		$link_html   = $show_link ? ' ' . hbch_matchcenter_link_markup( $g['gameId'] ?? '' ) : '';
-		$league_cell = $show_league ? '<td class="hbch-text-small hbch-league-cell">%9$s</td>' : '';
+		$link_html = $show_link ? ' ' . hbch_matchcenter_link_markup( $g['gameId'] ?? '' ) : '';
 
 		// LIVE-Badge und Forfait ersetzen Datum+Zeit durch EINE Zelle (colspan=2).
-		// Diese Zellen tragen absichtlich nicht die Klassen hbch-date-raw/-time-raw,
-		// damit das Datums-JS sie nicht überschreibt.
 		$is_live    = $show_live && hbch_is_game_live( $g );
 		$is_forfait = ! $is_live && hbch_is_game_forfait( $g );
 
 		if ( $is_live ) {
 			$datetime_cells = '<td class="hbch-text-small hbch-live-cell" colspan="2">' . hbch_live_badge_markup( $g ) . '</td>';
 		} elseif ( $is_forfait ) {
-			$forfait_date = '';
-			try {
-				$forfait_date = ( new DateTime( $g['gameDateTime'] ?? 'now', new DateTimeZone( 'Europe/Zurich' ) ) )->format( 'd.m.y' );
-			} catch ( Exception $e ) {
-				$forfait_date = '';
-			}
-			// Kein "%" im Text: die Zelle wird Teil des sprintf-Formatstrings.
-			$datetime_cells = '<td class="hbch-text-small hbch-forfait-cell" colspan="2">' . esc_html( $forfait_date ) . ' <span class="hbch-forfait-badge">Forfait</span></td>';
+			$datetime_cells = '<td class="hbch-text-small hbch-forfait-cell" colspan="2">' . esc_html( hbch_game_date_text( $g, 'short' ) ) . ' <span class="hbch-forfait-badge">Forfait</span></td>';
 		} else {
-			$datetime_cells = '<td class="hbch-text-small hbch-date-raw">%1$s</td><td class="hbch-text-small hbch-time-raw"></td>';
+			$datetime_cells = '<td class="hbch-text-small">' . esc_html( hbch_game_date_text( $g, 'short' ) ) . '</td>'
+				. '<td class="hbch-text-small"><strong>' . esc_html( hbch_format_game_time( $g ) ) . '</strong></td>';
 		}
 
 		$row_class = 'hbch-game-row' . ( $is_live ? ' hbch-game-row-live' : '' ) . ( $is_forfait ? ' hbch-game-row-forfait' : '' );
 
-		$rows .= sprintf(
-			'<tr class="' . $row_class . '">'
-				. $datetime_cells
-				. $league_cell . '
-				<td class="hbch-hidden-source">%2$s</td>
-				<td class="hbch-team-cell hbch-align-right">%3$s %4$s</td>
-				<td class="hbch-vs-cell hbch-priority-2"> : </td>
-				<td class="hbch-team-cell hbch-align-left">%5$s %6$s</td>'
-				. ( $show_venue_col ? '<td class="' . esc_attr( $venue_td_class ) . '">%7$s</td>' : '' )
-				. ( $show_link      ? '<td class="' . esc_attr( $link_td_class )  . '">%8$s</td>' : '' ) . '
-			</tr>',
-			esc_html( $g['gameDateTime'] ?? '' ),
-			esc_html( $g['gameStatus'] ?? '' ),
-			hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ),
-			hbch_team_name_markup( $g['teamAName'] ?? '', $g['teamANameShort'] ?? '', $short_names ),
-			hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ),
-			hbch_team_name_markup( $g['teamBName'] ?? '', $g['teamBNameShort'] ?? '', $short_names ),
-			$venue_html,
-			$link_html,
-			esc_html( $g['leagueShort'] ?? '' )
-		);
+		$rows .= '<tr class="' . esc_attr( $row_class ) . '">'
+			. $datetime_cells
+			. ( $show_league ? '<td class="hbch-text-small hbch-league-cell">' . esc_html( $g['leagueShort'] ?? '' ) . '</td>' : '' )
+			. '<td class="hbch-hidden-source">' . esc_html( $g['gameStatus'] ?? '' ) . '</td>'
+			. '<td class="hbch-team-cell hbch-align-right">'
+				. hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 )
+				. ' ' . hbch_team_name_markup( $g['teamAName'] ?? '', $g['teamANameShort'] ?? '', $short_names )
+			. '</td>'
+			. '<td class="hbch-vs-cell hbch-priority-2"> : </td>'
+			. '<td class="hbch-team-cell hbch-align-left">'
+				. hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 )
+				. ' ' . hbch_team_name_markup( $g['teamBName'] ?? '', $g['teamBNameShort'] ?? '', $short_names )
+			. '</td>'
+			. ( $show_venue_col ? '<td class="' . esc_attr( $venue_td_class ) . '">' . $venue_html . '</td>' : '' )
+			. ( $show_link ? '<td class="' . esc_attr( $link_td_class ) . '">' . $link_html . '</td>' : '' )
+			. '</tr>';
 	}
 
 	$venue_th  = $show_venue_col ? '<th class="hbch-game-row hbch-priority-2">' . esc_html( $f['venue']['label'] ) . '</th>' : '';
@@ -193,36 +191,29 @@ function hbch_render_games_table_last( array $games, $table_id, $show_league = f
 		$venue_html     = ( $show_venue ? hbch_venue_display( $g, $show_addr ) : '' ) . hbch_extra_line( $g, $show_round, $show_type, $round_prefix );
 		$spectators_txt = $show_spect ? esc_html( $g['spectators'] ?? '' ) . ' ' . esc_html( $spect_label ) : '';
 		$link_html      = $show_link ? ' ' . hbch_matchcenter_link_markup( $g['gameId'] ?? '' ) : '';
-		$league_html    = $show_league ? '<td class="hbch-text-small hbch-league-cell">%14$s</td>' : '';
-		$rows .= sprintf(
-			'<tr class="hbch-game-row">
-				<td class="hbch-text-small hbch-date-raw">%1$s</td>
-				<td class="hbch-hidden-source hbch-time-raw"></td>'
-				. $league_html . '
-				<td class="hbch-hidden-source">%2$s</td>
-				<td class="hbch-team-cell hbch-align-right">%3$s %4$s</td>
-				<td class="hbch-result-cell hbch-priority-2"><span class="hbch-score-badge">%5$s : %6$s </span>(%7$s:%8$s)</td>
-				<td class="hbch-team-cell hbch-align-left">%9$s %10$s</td>
-				<td class="hbch-result-cell hbch-priority-1"><span class="hbch-score-badge">%5$s : %6$s </span>(%7$s:%8$s)</td>'
-				. ( $show_venue_col ? '<td class="' . esc_attr( $venue_td_class ) . '">%11$s</td>' : '' )
-				. ( $show_spect     ? '<td class="' . esc_attr( $spect_td_class ) . '">%12$s</td>' : '' )
-				. ( $show_link      ? '<td class="' . esc_attr( $link_td_class )  . '">%13$s</td>' : '' ) . '
-			</tr>',
-			esc_html( $g['gameDateTime'] ?? '' ),
-			esc_html( $g['gameStatus'] ?? '' ),
-			hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ),
-			hbch_team_name_markup( $g['teamAName'] ?? '', $g['teamANameShort'] ?? '', $short_names ),
-			esc_html( $g['teamAScoreFT'] ?? '' ),
-			esc_html( $g['teamBScoreFT'] ?? '' ),
-			esc_html( $g['teamAScoreHT'] ?? '' ),
-			esc_html( $g['teamBScoreHT'] ?? '' ),
-			hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ),
-			hbch_team_name_markup( $g['teamBName'] ?? '', $g['teamBNameShort'] ?? '', $short_names ),
-			$venue_html,
-			$spectators_txt,
-			$link_html,
-			esc_html( $g['leagueShort'] ?? '' )
-		);
+
+		$score_ft = esc_html( $g['teamAScoreFT'] ?? '' ) . ' : ' . esc_html( $g['teamBScoreFT'] ?? '' ) . ' ';
+		$score_ht = '(' . esc_html( $g['teamAScoreHT'] ?? '' ) . ':' . esc_html( $g['teamBScoreHT'] ?? '' ) . ')';
+		$result   = '<span class="hbch-score-badge">' . $score_ft . '</span>' . $score_ht;
+
+		$rows .= '<tr class="hbch-game-row">'
+			. '<td class="hbch-text-small">' . esc_html( hbch_game_date_text( $g, 'short' ) ) . '</td>'
+			. ( $show_league ? '<td class="hbch-text-small hbch-league-cell">' . esc_html( $g['leagueShort'] ?? '' ) . '</td>' : '' )
+			. '<td class="hbch-hidden-source">' . esc_html( $g['gameStatus'] ?? '' ) . '</td>'
+			. '<td class="hbch-team-cell hbch-align-right">'
+				. hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 )
+				. ' ' . hbch_team_name_markup( $g['teamAName'] ?? '', $g['teamANameShort'] ?? '', $short_names )
+			. '</td>'
+			. '<td class="hbch-result-cell hbch-priority-2">' . $result . '</td>'
+			. '<td class="hbch-team-cell hbch-align-left">'
+				. hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 )
+				. ' ' . hbch_team_name_markup( $g['teamBName'] ?? '', $g['teamBNameShort'] ?? '', $short_names )
+			. '</td>'
+			. '<td class="hbch-result-cell hbch-priority-1">' . $result . '</td>'
+			. ( $show_venue_col ? '<td class="' . esc_attr( $venue_td_class ) . '">' . $venue_html . '</td>' : '' )
+			. ( $show_spect ? '<td class="' . esc_attr( $spect_td_class ) . '">' . $spectators_txt . '</td>' : '' )
+			. ( $show_link ? '<td class="' . esc_attr( $link_td_class ) . '">' . $link_html . '</td>' : '' )
+			. '</tr>';
 	}
 
 	$venue_th  = $show_venue_col ? '<th class="hbch-game-row hbch-priority-2">' . esc_html( $f['venue']['label'] ) . '</th>' : '';
@@ -269,8 +260,8 @@ add_shortcode( 'hbch_team_last_games', function ( $atts ) {
 } );
 
 /**
- * Kommende Spiele über alle Teams des Vereins, inkl. JSON-LD. Ruft die
- * REST-Callback-Funktion direkt auf.
+ * Kommende Spiele über alle Teams des Vereins, inkl. JSON-LD. Die Spiele
+ * kommen aus hbch_get_next_games() (rest.php).
  *
  * $layout: "cards" (Default) = Kartenlook für die Startseite, gleiches Grid
  *   wie hbch_render_home_last_games() (Felder aus "Vereins-Spielplan").
@@ -280,7 +271,6 @@ add_shortcode( 'hbch_team_last_games', function ( $atts ) {
  * $limit: leer = Standard-Anzahl aus den Einstellungen.
  */
 function hbch_render_home_next_games( $limit = '', $exclude = '', $layout = 'cards' ) {
-	$limit = ( $limit !== '' && $limit !== null ) ? $limit : hbch_get_setting( 'default_games_limit' );
 	$table = ( $layout === 'table' );
 	$f     = hbch_get_setting( $table ? 'games_fields' : 'home_fields' );
 
@@ -295,13 +285,7 @@ function hbch_render_home_next_games( $limit = '', $exclude = '', $layout = 'car
 	$spect_label  = $f['spectators']['label'];
 
 	// Mit LIVE-Badge bleibt ein laufendes Spiel in der Liste ("include_live").
-	$req = new WP_REST_Request( 'GET', '/handballch/v1/next-games' );
-	$req->set_param( 'limit', intval( $limit ) );
-	$req->set_param( 'exclude', $exclude );
-	if ( $show_live ) {
-		$req->set_param( 'include_live', true );
-	}
-	$games = hbch_next_games( $req )->get_data();
+	$games = hbch_get_next_games( $limit, $exclude, $show_live );
 
 	if ( $table ) {
 		return hbch_render_games_table_next( $games, 'hbch-club-games-next', true ) . hbch_render_games_jsonld( $games );
@@ -320,46 +304,39 @@ function hbch_render_home_next_games( $limit = '', $exclude = '', $layout = 'car
 		$name_a = '<span class="hbch-hide-mobile">' . esc_html( $g['teamAName'] ?? '' ) . '</span>';
 		$name_b = '<span class="hbch-hide-mobile">' . esc_html( $g['teamBName'] ?? '' ) . '</span>';
 
-		// Das LIVE-Badge ersetzt nur die sichtbare Anzeige, die versteckte
-		// hbch-date-raw-Zelle behält den Rohwert.
-		$is_live          = $show_live && hbch_is_game_live( $g );
-		$datetime_display = $is_live ? hbch_live_badge_markup( $g ) : '%1$s';
+		// Datum (untereinander mit der fetten Uhrzeit) oder, solange das Spiel läuft, das LIVE-Badge.
+		if ( $show_live && hbch_is_game_live( $g ) ) {
+			$datetime_display = hbch_live_badge_markup( $g );
+		} else {
+			$datetime_display = esc_html( hbch_game_date_text( $g, 'numeric' ) ) . '<br><strong>' . esc_html( hbch_format_game_time( $g ) ) . '</strong>';
+		}
 
 		// Gleiches Grid wie hbch_render_home_last_games(): Team A | Mitte | Team B.
-		$rows .= sprintf(
-			'<tr>
-				<td class="hbch-text-small hbch-date-raw hbch-hidden-source">%1$s</td>
-				<td class="hbch-text-small hbch-time-raw hbch-hidden-source"></td>
-				<td class="hbch-hidden-source">%2$s</td>
-				<td class="hbch-cell-padded">
-					<div class="hbch-home-next-game"><small><div class="hbch-home-result-grid">
-						<div class="hbch-result-team">%3$s %4$s</div>
-						<div class="hbch-result-center">
-							<span class="hbch-league">%5$s</span>
-							<span class="hbch-game-datetime">' . $datetime_display . '</span>
-							<span class="hbch-result-meta%9$s">
-								<span class="hbch-result-venue">%6$s</span>
-							</span>
-						</div>
-						<div class="hbch-result-team">%7$s %8$s</div>
-					</div></small></div>
-				</td>
-			</tr>',
-			esc_html( $g['gameDateTime'] ?? '' ),
-			esc_html( $g['gameStatus'] ?? '' ),
-			hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-score', 90, $dual_logo ),
-			$name_a,
-			esc_html( $g['leagueShort'] ?? '' ),
-			$venue_html,
-			hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-score', 90, $dual_logo ),
-			$name_b,
-			$mobile_class
-		);
+		$rows .= '<tr>'
+			. '<td class="hbch-hidden-source">' . esc_html( $g['gameStatus'] ?? '' ) . '</td>'
+			. '<td class="hbch-cell-padded">'
+				. '<div class="hbch-home-next-game"><small><div class="hbch-home-result-grid">'
+					. '<div class="hbch-result-team">'
+						. hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-score', 90, $dual_logo )
+						. ' ' . $name_a
+					. '</div>'
+					. '<div class="hbch-result-center">'
+						. '<span class="hbch-league">' . esc_html( $g['leagueShort'] ?? '' ) . '</span>'
+						. '<span class="hbch-game-datetime">' . $datetime_display . '</span>'
+						. '<span class="hbch-result-meta' . $mobile_class . '">'
+							. '<span class="hbch-result-venue">' . $venue_html . '</span>'
+						. '</span>'
+					. '</div>'
+					. '<div class="hbch-result-team">'
+						. hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-score', 90, $dual_logo )
+						. ' ' . $name_b
+					. '</div>'
+				. '</div></small></div>'
+			. '</td>'
+			. '</tr>';
 	}
 
 	$thead = '<thead><tr>
-			<th scope="col" class="screen-reader-text">Datum</th>
-			<th scope="col" class="screen-reader-text">Zeit</th>
 			<th scope="col" class="screen-reader-text">Status</th>
 			<th scope="col" class="screen-reader-text">Begegnung</th>
 		</tr></thead>';
@@ -386,12 +363,7 @@ add_shortcode( 'hbch_home_next_games', function ( $atts ) {
  * $limit: leer = Standard-Anzahl aus den Einstellungen.
  */
 function hbch_render_home_last_games( $limit = '', $exclude = '', $layout = 'cards' ) {
-	$limit = ( $limit !== '' && $limit !== null ) ? $limit : hbch_get_setting( 'default_games_limit' );
-
-	$req = new WP_REST_Request( 'GET', '/handballch/v1/last-games' );
-	$req->set_param( 'limit', intval( $limit ) );
-	$req->set_param( 'exclude', $exclude );
-	$games = hbch_last_games( $req )->get_data();
+	$games = hbch_get_last_games( $limit, $exclude );
 
 	if ( $layout === 'table' ) {
 		return hbch_render_games_table_last( $games, 'hbch-club-games-last', true );
@@ -421,39 +393,29 @@ function hbch_render_home_last_games( $limit = '', $exclude = '', $layout = 'car
 		$name_a = '<span class="hbch-hide-mobile">' . esc_html( $g['teamAName'] ?? '' ) . '</span>';
 		$name_b = '<span class="hbch-hide-mobile">' . esc_html( $g['teamBName'] ?? '' ) . '</span>';
 
-		$rows .= sprintf(
-			'<tr>
-				<td class="hbch-text-small hbch-date-raw hbch-hidden-source">%1$s</td>
-				<td class="hbch-text-small hbch-time-raw hbch-hidden-source"></td>
-				<td class="hbch-hidden-source">%2$s</td>
-				<td class="hbch-cell-padded">
-					<div class="hbch-home-last-game"><small><div class="hbch-home-result-grid">
-						<div class="hbch-result-team">%3$s %4$s</div>
-						<div class="hbch-result-center">
-							<span class="hbch-league">%5$s</span>
-							<big><strong class="hbch-score-result">%6$s:%7$s</strong></big>
-							<span class="hbch-result-meta%12$s">
-								<span class="hbch-result-meta-line"><span class="hbch-game-date-text">%1$s</span>%8$s</span>
-								<span class="hbch-result-venue">%9$s</span>
-							</span>
-						</div>
-						<div class="hbch-result-team">%10$s %11$s</div>
-					</div></small></div>
-				</td>
-			</tr>',
-			esc_html( $g['gameDateTime'] ?? '' ),
-			esc_html( $g['gameStatus'] ?? '' ),
-			hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-score', 90, $dual_logo ),
-			$name_a,
-			esc_html( $g['leagueShort'] ?? '' ),
-			esc_html( $g['teamAScoreFT'] ?? '' ),
-			esc_html( $g['teamBScoreFT'] ?? '' ),
-			$spect_html,
-			$venue_html,
-			hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-score', 90, $dual_logo ),
-			$name_b,
-			$mobile_class
-		);
+		$rows .= '<tr>'
+			. '<td class="hbch-hidden-source">' . esc_html( $g['gameStatus'] ?? '' ) . '</td>'
+			. '<td class="hbch-cell-padded">'
+				. '<div class="hbch-home-last-game"><small><div class="hbch-home-result-grid">'
+					. '<div class="hbch-result-team">'
+						. hbch_team_logo_markup( $g['teamAName'] ?? '', $g['teamAId'] ?? '', $g['clubTeamAId'] ?? '', 'hbch-team-logo-score', 90, $dual_logo )
+						. ' ' . $name_a
+					. '</div>'
+					. '<div class="hbch-result-center">'
+						. '<span class="hbch-league">' . esc_html( $g['leagueShort'] ?? '' ) . '</span>'
+						. '<big><strong class="hbch-score-result">' . esc_html( $g['teamAScoreFT'] ?? '' ) . ':' . esc_html( $g['teamBScoreFT'] ?? '' ) . '</strong></big>'
+						. '<span class="hbch-result-meta' . $mobile_class . '">'
+							. '<span class="hbch-result-meta-line"><span class="hbch-game-date-text">' . esc_html( hbch_game_date_text( $g, 'long' ) ) . '</span>' . $spect_html . '</span>'
+							. '<span class="hbch-result-venue">' . $venue_html . '</span>'
+						. '</span>'
+					. '</div>'
+					. '<div class="hbch-result-team">'
+						. hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-score', 90, $dual_logo )
+						. ' ' . $name_b
+					. '</div>'
+				. '</div></small></div>'
+			. '</td>'
+			. '</tr>';
 	}
 
 	return '<table class="hbch-home-games-last hbch-table-plain"><tbody>' . $rows . '</tbody></table>';
@@ -468,29 +430,40 @@ add_shortcode( 'hbch_home_last_games', function ( $atts ) {
 } );
 
 /**
- * [hbch_next_game team="slug"] — nächstes Spiel mit Live-Countdown.
- * Die Daten kommen serverseitig, nur der Countdown läuft im Browser.
+ * Nächstes Spiel eines Teams mit Countdown (#hbch-next-game-N). Datum, Halle
+ * und die Startwerte des Countdowns kommen serverseitig; nur das Weiterzählen
+ * übernimmt assets/js/public.js (liest data-kickoff, UTC).
  */
-add_shortcode( 'hbch_next_game', function ( $atts ) {
-	$atts    = shortcode_atts( [ 'team' => '' ], $atts );
-	$team_id = hbch_get_team_id( $atts['team'] );
-	$game    = hbch_fetch_next_game( $team_id );
+function hbch_render_next_game( $team_id ) {
+	$none = '<table class="hbch-next-game-widget hbch-table-plain"><tbody><tr><td>' . esc_html( hbch_get_setting( 'text_next_game_none' ) ) . '</td></tr></tbody></table>';
 
-	if ( ! $game || empty( $game['gameDateTime'] ) ) {
-		return '<table class="hbch-next-game-widget hbch-table-plain"><tbody><tr><td>' . esc_html( hbch_get_setting( 'text_next_game_none' ) ) . '</td></tr></tbody></table>';
+	$game = hbch_fetch_next_game( $team_id );
+	if ( ! $game ) {
+		return $none;
 	}
 
-	// Eindeutige ID, falls der Shortcode mehrfach auf einer Seite steht.
+	// gameDateTime ist naive Schweizer Ortszeit: für den Countdown nach UTC umrechnen.
+	$kickoff = hbch_game_datetime( $game );
+	if ( ! $kickoff ) {
+		return $none;
+	}
+	$kickoff_utc = clone $kickoff;
+	$kickoff_utc->setTimezone( new DateTimeZone( 'UTC' ) );
+	$kickoff_iso = $kickoff_utc->format( 'Y-m-d\TH:i:s\Z' );
+
+	// Startwerte des Countdowns (ohne JavaScript sichtbar, das JS zählt weiter).
+	$remaining = max( 0, $kickoff_utc->getTimestamp() - time() );
+	$days      = (int) floor( $remaining / DAY_IN_SECONDS );
+	$hours     = (int) floor( ( $remaining % DAY_IN_SECONDS ) / HOUR_IN_SECONDS );
+	$mins      = (int) floor( ( $remaining % HOUR_IN_SECONDS ) / MINUTE_IN_SECONDS );
+
+	// Eindeutige ID, falls das Widget mehrfach auf einer Seite steht.
 	static $instance = 0;
 	$instance++;
 	$id = 'hbch-next-game-' . $instance;
 
 	$team_a     = esc_html( $game['teamAName'] ?? '' );
 	$team_b     = esc_html( $game['teamBName'] ?? '' );
-	// Roher Hallenname: er wird unten per wp_json_encode() als JS-String
-	// ausgegeben und per textContent gesetzt (kein esc_html/esc_js nötig,
-	// sonst erschiene ein "&" im Namen als "&amp;").
-	$venue      = (string) ( $game['venue'] ?? '' );
 	$cf         = hbch_get_setting( 'countdown_fields' );
 	$show_venue = ! empty( $cf['venue']['enabled'] );
 	$show_logos = ! empty( $cf['logos']['enabled'] );
@@ -499,78 +472,44 @@ add_shortcode( 'hbch_next_game', function ( $atts ) {
 	$logo_a = $show_logos ? hbch_team_logo_markup( $game['teamAName'] ?? '', $game['teamAId'] ?? '', $game['clubTeamAId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ) . ' ' : '';
 	$logo_b = $show_logos ? hbch_team_logo_markup( $game['teamBName'] ?? '', $game['teamBId'] ?? '', $game['clubTeamBId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ) . ' ' : '';
 
-	// gameDateTime ist naive Schweizer Ortszeit: serverseitig nach UTC umrechnen,
-	// sonst läuft der Countdown im Sommer 2h, im Winter 1h falsch.
-	try {
-		$kickoff_utc = new DateTime( $game['gameDateTime'], new DateTimeZone( 'Europe/Zurich' ) );
-		$kickoff_utc->setTimezone( new DateTimeZone( 'UTC' ) );
-		$game_utc_iso = esc_js( $kickoff_utc->format( 'Y-m-d\TH:i:s' ) );
-	} catch ( Exception $e ) {
-		$game_utc_iso = esc_js( $game['gameDateTime'] );
+	$date_text = hbch_format_game_date( $game, 'weekday' ) . ' • ' . hbch_format_game_time( $game ) . ' Uhr';
+	$venue     = trim( (string) ( $game['venue'] ?? '' ) );
+	if ( $show_venue && $venue !== '' ) {
+		$date_text .= ' • ' . $venue;
 	}
-
-	$venue_json = wp_json_encode( $venue, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ) ?: '""';
 
 	ob_start();
 	?>
-	<table id="<?php echo esc_attr( $id ); ?>" class="hbch-next-game-widget hbch-table-plain">
+	<table id="<?php echo esc_attr( $id ); ?>" class="hbch-next-game-widget hbch-table-plain" data-kickoff="<?php echo esc_attr( $kickoff_iso ); ?>">
 		<tbody>
 			<tr>
 				<td colspan="7" class="hbch-next-game-title"><?php echo esc_html( hbch_get_setting( 'text_next_game_title' ) ); ?></td>
 			</tr>
 			<tr class="hbch-next-game-teams-row">
-				<td class="hbch-next-game-team"><?php echo $logo_a . $team_a; ?></td>
+				<td class="hbch-next-game-team"><?php echo $logo_a . $team_a; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Logo-Markup und Namen sind bereits escaped. ?></td>
 				<td class="hbch-next-game-vs"><?php echo esc_html( hbch_get_setting( 'text_next_game_vs' ) ); ?></td>
-				<td class="hbch-next-game-team"><?php echo $logo_b . $team_b; ?></td>
+				<td class="hbch-next-game-team"><?php echo $logo_b . $team_b; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Logo-Markup und Namen sind bereits escaped. ?></td>
 				<td class="hbch-next-game-spacer"></td>
-				<td class="hbch-countdown-number hbch-next-game-days">00</td>
-				<td class="hbch-countdown-number hbch-next-game-hours">00</td>
-				<td class="hbch-countdown-number hbch-next-game-mins">00</td>
+				<td class="hbch-countdown-number hbch-next-game-days"><?php echo esc_html( sprintf( '%02d', $days ) ); ?></td>
+				<td class="hbch-countdown-number hbch-next-game-hours"><?php echo esc_html( sprintf( '%02d', $hours ) ); ?></td>
+				<td class="hbch-countdown-number hbch-next-game-mins"><?php echo esc_html( sprintf( '%02d', $mins ) ); ?></td>
 			</tr>
 			<tr class="hbch-next-game-labels-row">
-				<td colspan="4" class="hbch-next-game-datetext"></td>
+				<td colspan="4" class="hbch-next-game-datetext"><?php echo esc_html( $date_text ); ?></td>
 				<td class="hbch-next-game-label"><?php echo esc_html( hbch_get_setting( 'text_days_label' ) ); ?></td>
 				<td class="hbch-next-game-label"><?php echo esc_html( hbch_get_setting( 'text_hours_label' ) ); ?></td>
 				<td class="hbch-next-game-label"><?php echo esc_html( hbch_get_setting( 'text_mins_label' ) ); ?></td>
 			</tr>
 		</tbody>
 	</table>
-	<script>
-	(function () {
-		var el = document.getElementById('<?php echo esc_js( $id ); ?>');
-		if ( ! el ) { return; }
-		// Echter UTC-Zeitpunkt (siehe PHP oben), Anzeige zurück in Europe/Zurich.
-		var dt = new Date('<?php echo $game_utc_iso; ?>Z');
-
-		var dateStr = dt.toLocaleDateString('de-CH', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Zurich' });
-		var timeStr = dt.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Zurich' });
-		el.querySelector('.hbch-next-game-datetext').textContent = dateStr + ' \u2022 ' + timeStr + ' Uhr'<?php echo $show_venue ? " + ' \\u2022 ' + " . $venue_json : ''; ?>;
-
-		var elDays  = el.querySelector('.hbch-next-game-days');
-		var elHours = el.querySelector('.hbch-next-game-hours');
-		var elMins  = el.querySelector('.hbch-next-game-mins');
-
-		function tick() {
-			var diff = dt.getTime() - Date.now();
-			if (diff <= 0) {
-				elDays.textContent = '00';
-				elHours.textContent = '00';
-				elMins.textContent = '00';
-				clearInterval(timer);
-				return;
-			}
-			var days  = Math.floor(diff / (1000 * 60 * 60 * 24));
-			var hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-			var mins  = Math.floor((diff / (1000 * 60)) % 60);
-			elDays.textContent  = String(days).padStart(2, '0');
-			elHours.textContent = String(hours).padStart(2, '0');
-			elMins.textContent  = String(mins).padStart(2, '0');
-		}
-
-		tick();
-		var timer = setInterval(tick, 60000);
-	})();
-	</script>
 	<?php
 	return ob_get_clean() . hbch_render_games_jsonld( [ $game ] );
+}
+
+/**
+ * [hbch_next_game team="slug"] — nächstes Spiel mit Live-Countdown.
+ */
+add_shortcode( 'hbch_next_game', function ( $atts ) {
+	$atts = shortcode_atts( [ 'team' => '' ], $atts );
+	return hbch_render_next_game( hbch_get_team_id( $atts['team'] ) );
 } );
