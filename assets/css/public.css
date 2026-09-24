@@ -56,10 +56,6 @@
 	border: 0;
 }
 
-.hbch-col-wide {
-	/* Spalten S/U/N/Tore/+-: auf schmalen Bildschirmen ausgeblendet (Media Query unten) */
-}
-
 .hbch-rank-cell {
 	width: 46px;
 	color: var(--hbch-color-inverse);
@@ -89,7 +85,7 @@
 	background-color: var(--hbch-zone-relegation-direct);
 }
 
-/* Eigene Mannschaft (Klasse setzt das Frontend-JS, siehe hbch_get_highlight_js_body()) */
+/* Eigene Mannschaft (Klasse setzt der Server, siehe hbch_is_own_team_name() in includes/api.php) */
 .hbch-row-highlight,
 .hbch-row-highlight-mini td {
 	background-color: var(--hbch-color-accent);
@@ -201,9 +197,6 @@ th.hbch-game-row {
 	}
 	.hbch-priority-2 {
 		display: none;
-	}
-	.hbch-col-half {
-		width: 50%;
 	}
 	.hbch-team-cell {
 		width: 100%;
@@ -380,7 +373,6 @@ th.hbch-game-row {
 	text-transform: uppercase;
 	border: none;
 	table-layout: auto;
-	padding-left: min(2%);
 }
 
 .hbch-next-game-widget td {
