@@ -94,7 +94,11 @@ Ausschluss-Text und Beschriftung stellt man in der Seitenleiste ein.
 | `handballch/home-last-games` | `[hbch_home_last_games]` |
 | `handballch/ics-subscribe` | `[hbch_ics]` |
 
-**Farben pro Block:** Jeder Block hat in der Seitenleiste ein Panel „Farben“. Dort lassen sich die globalen Farben
+Im Block-Inserter erscheinen sie unter den Namen „Rangliste“, „Team – Spielplan / Resultate“,
+„Countdown (nächstes Spiel)“, „Verein – Spielplan / Resultate“ und „Kalender“ (Anzeigename, der eigentliche
+Blockname wie `handballch/ranking` bleibt gleich).
+
+**Farben pro Block:** Jeder Block hat in der Seitenleiste ein Panel „Farben“.Dort lassen sich die globalen Farben
 nur für diesen einen Block überschreiben (z. B. eine andere Akzentfarbe für einen Countdown). Nicht gesetzte Farben
 übernehmen den globalen Wert. Welche Farben ein Block anbietet, hängt von seinem Inhalt ab.
 
@@ -227,8 +231,11 @@ erzwingen, siehe [Filter & Hooks](#filter--hooks).
   stehen im Reiter „Farben“.
 - **LIVE-Badge:** Ersetzt Datum und Zeit durch einen Link ins Matchcenter, solange ein Spiel läuft. Die API hat
   keinen „läuft“-Status, deshalb gilt ein Spiel ab Anpfiff **90 Minuten** lang als live (per Filter anpassbar).
+- **Liga-Spalte im Vereins-Spielplan (Tabellenlayout):** `[hbch_home_next_games layout="table"]` und
+  `[hbch_home_last_games layout="table"]` (bzw. Block „Verein – Spielplan / Resultate“, Layout „Tabelle“) zeigen
+  zusätzlich eine Liga-Spalte direkt nach Datum/Zeit, da hier Spiele mehrerer Ligen gemischt auftreten. Der
+  Team-Spielplan hat diese Spalte nicht (dort immer nur eine Liga).
 - **Forfait:** Forfait-Spiele fehlen in den vereinsweiten Listen und im Countdown, im Team-Spielplan stehen sie mit
-  Datum und Badge „Forfait“. Sie gelten nie als live und erzeugen keine Strukturdaten.
 - **Matchcenter-Link:** Das Icon wird pro Seite einmal als SVG-`<symbol>` ausgegeben und pro Zeile referenziert.
 - **Datumsformat:** Die Server geben rohe ISO-Zeiten aus, das Frontend-JS formatiert sie im Browser
   (`hbch-date-raw`/`hbch-time-raw`). Der Countdown rechnet die Schweizer Ortszeit serverseitig korrekt nach UTC um.
