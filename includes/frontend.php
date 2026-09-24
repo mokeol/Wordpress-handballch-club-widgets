@@ -2,7 +2,8 @@
 /**
  * includes/frontend.php
  *
- * Asset-Laden, Inline-CSS und Frontend-JavaScript.
+ * Asset-Laden (CSS und assets/js/public.js), Inline-CSS und der Filter, der
+ * fremde title-Attribute von Team-Logos entfernt.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -28,40 +29,14 @@ function hbch_get_dynamic_inline_css() {
 }
 
 /**
- * JS-Rumpf (ohne <script>-Tags) für die Hervorhebung der eigenen Mannschaft
- * und das Entfernen fremdgesetzter title-Attribute an Team-Logos. Wird im
- * Frontend und nach jeder Live-Vorschau im Adminpanel ausgegeben.
- *
- * Der Such-Text wird per wp_json_encode() als JS-String ausgegeben (esc_js()
- * ist für HTML-Attribute gedacht und würde z. B. "&" in "&amp;" umwandeln).
- * Verglichen wird ohne Beachtung der Gross-/Kleinschreibung, wie bei der
- * Erkennung von Spielgemeinschaften (hbch_team_logo_markup()).
+ * JS-Rumpf (ohne <script>-Tags), der title-Attribute von Team-Logos entfernt.
+ * Nur noch für die Live-Vorschau im Adminpanel; im Frontend erledigt das
+ * assets/js/public.js. Die Hervorhebung der eigenen Mannschaft passiert
+ * serverseitig (hbch_is_own_team_name() in api.php). Der Funktionsname bleibt
+ * aus Kompatibilitätsgründen erhalten.
  */
 function hbch_get_highlight_js_body() {
-	$enabled    = (bool) hbch_get_setting( 'highlight_own_team_enabled' );
-	$match_text = (string) hbch_get_setting( 'highlight_own_team_text' );
-	$match_json = wp_json_encode( $match_text, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT );
-
-	ob_start();
-	?>
-	<?php if ( $enabled && $match_text !== '' && $match_json ) : ?>
-	var hbchOwnTeam = <?php echo $match_json; ?>.toLowerCase();
-	document.querySelectorAll('#hbch-ranking-team td').forEach(function (td) {
-		if (td.textContent.toLowerCase().includes(hbchOwnTeam)) {
-			td.closest('tr').classList.add('hbch-row-highlight');
-		}
-	});
-	document.querySelectorAll('#hbch-ranking-mini td').forEach(function (td) {
-		if (td.textContent.toLowerCase().includes(hbchOwnTeam)) {
-			td.closest('tr').classList.add('hbch-row-highlight-mini');
-		}
-	});
-	<?php endif; ?>
-	document.querySelectorAll('img[class*="hbch-team-logo"][title]').forEach(function (img) {
-		img.removeAttribute('title');
-	});
-	<?php
-	return ob_get_clean();
+	return "document.querySelectorAll('img[class*=\"hbch-team-logo\"][title]').forEach(function (img) { img.removeAttribute('title'); });";
 }
 
 /**
@@ -69,7 +44,7 @@ function hbch_get_highlight_js_body() {
  * fertigen Seiteninhalt. Manche SEO-Plugins ergänzen sie automatisch; der
  * Filter läuft mit der spätestmöglichen Priorität. Andere Bilder bleiben
  * unangetastet. Arbeitet ein Plugin per Output-Buffer danach, hilft nur,
- * dessen Bild-Titel-Funktion abzuschalten (das JS oben ist ein Fallback).
+ * dessen Bild-Titel-Funktion abzuschalten (public.js ist ein Fallback).
  */
 function hbch_strip_logo_title_attributes( $content ) {
 	if ( strpos( $content, 'hbch-team-logo' ) === false ) {
@@ -88,7 +63,8 @@ add_filter( 'the_content', 'hbch_strip_logo_title_attributes', PHP_INT_MAX );
 
 /**
  * Enthält ein post_content-String einen Shortcode oder Block des Plugins?
- * Die Blocknamen müssen zu blocks.php passen (fünf Blöcke).
+ * Die Blocknamen müssen zu blocks.php passen (fünf Blöcke plus die alten,
+ * inzwischen zusammengelegten Blocknamen aus hbch_legacy_block_map()).
  */
 function hbch_content_uses_plugin( $content ) {
 	if ( $content === '' ) {
@@ -99,10 +75,13 @@ function hbch_content_uses_plugin( $content ) {
 		'hbch_ranking', 'hbch_team_ranking', 'hbch_team_next_games', 'hbch_team_last_games',
 		'hbch_home_next_games', 'hbch_home_last_games', 'hbch_next_game', 'hbch_ics',
 	];
-	static $blocks = [
-		'handballch/ranking', 'handballch/team-games', 'handballch/next-game',
-		'handballch/home-games', 'handballch/ics-subscribe',
-	];
+	$blocks = array_merge(
+		[
+			'handballch/ranking', 'handballch/team-games', 'handballch/next-game',
+			'handballch/home-games', 'handballch/ics-subscribe',
+		],
+		array_keys( hbch_legacy_block_map() )
+	);
 
 	foreach ( $shortcodes as $sc ) {
 		if ( has_shortcode( $content, $sc ) ) {
@@ -180,81 +159,7 @@ add_action( 'wp_enqueue_scripts', function () {
 
 	wp_enqueue_style( 'hbch-public', HBCH_URL . 'assets/css/public.css', [], HBCH_VERSION );
 	wp_add_inline_style( 'hbch-public', hbch_get_dynamic_inline_css() );
+
+	// Countdown, Kalender-Dropdown und Logo-title-Fallback (im Footer, ohne Abhängigkeiten).
+	wp_enqueue_script( 'hbch-public', HBCH_URL . 'assets/js/public.js', [], HBCH_VERSION, true );
 } );
-
-/**
- * Formatiert die vom Server ausgegebenen rohen ISO-Datumswerte im Browser.
- */
-function hbch_frontend_date_format_js() {
-	if ( ! hbch_page_uses_plugin() ) {
-		return;
-	}
-	?>
-	<script type="text/javascript">
-		// Team-Spielpläne
-		var y = document.getElementsByClassName("hbch-date-raw");
-		var x = document.getElementsByClassName("hbch-time-raw");
-		var i;
-		for (i = 0; i < y.length; i++) {
-			var date_str = y[i].innerHTML,
-				options = { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' },
-				formatted = new Date(date_str + 'Z').toLocaleDateString('de-DE', options);
-			if (formatted.includes(',')) {
-				var date_parts1 = formatted.substring(0, formatted.indexOf(",")).split(" ").join(" ");
-				var formatted_date1 = date_parts1;
-				var formatted_date3 = formatted.substr(formatted.indexOf(",") + 2).bold();
-				y[i].innerHTML = formatted_date1;
-				x[i].innerHTML = formatted_date3;
-			} else {
-				var date_parts = formatted.substring(0, formatted.indexOf("um")).split(" ").join(" ");
-				var formatted_date = date_parts;
-				var formatted_date2 = formatted.substr(formatted.indexOf("um") + 2).bold();
-				y[i].innerHTML = formatted_date;
-				x[i].innerHTML = formatted_date2;
-			}
-		}
-
-		// Startseiten-Widgets
-		function hbchFormatStartDate(className, options, withTime) {
-			var els = document.getElementsByClassName(className);
-			for (var i = 0; i < els.length; i++) {
-				if (els[i].querySelector('.hbch-live-badge')) {
-					continue;
-				}
-				var date_str = els[i].innerHTML,
-					formatted = new Date(date_str + 'Z').toLocaleDateString('de-DE', options),
-					hasComma = formatted.includes(','),
-					sepIndex = hasComma ? formatted.indexOf(',') : formatted.indexOf('um'),
-					date_part = formatted.substring(0, sepIndex).split(" ").join(" ");
-				if (withTime) {
-					var time_part = formatted.substr(sepIndex + (hasComma ? 1 : 2)).bold();
-					els[i].innerHTML = date_part + '<br>' + time_part;
-				} else {
-					els[i].innerHTML = date_part;
-				}
-			}
-		}
-
-		hbchFormatStartDate('hbch-game-datetime', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }, true);
-		hbchFormatStartDate('hbch-game-date-text', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }, false);
-	</script>
-	<?php
-}
-add_action( 'wp_footer', 'hbch_frontend_date_format_js' );
-
-/**
- * Hervorhebung der eigenen Mannschaft, Entfernen fremder Logo-Titel.
- */
-function hbch_frontend_highlight_js() {
-	if ( ! hbch_page_uses_plugin() ) {
-		return;
-	}
-	?>
-	<script type="text/javascript">
-		document.addEventListener('DOMContentLoaded', function () {
-			<?php echo hbch_get_highlight_js_body(); ?>
-		});
-	</script>
-	<?php
-}
-add_action( 'wp_head', 'hbch_frontend_highlight_js' );
