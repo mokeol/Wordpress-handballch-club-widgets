@@ -5,11 +5,11 @@ ICS-Kalender-Export auf Basis der `clubapi.handball.ch`-API des SHV. Alles ist �
 (Teams, API-Zugang, sichtbare Felder, Texte, Farben, Cache-Dauer, eigenes CSS).
 
 **Inoffiziell:** Dieses Plugin ist nicht mit dem Schweizerischen Handballverband (SHV) verbunden. Für die API braucht
-jeder Verein eigene Zugangsdaten (Club-ID und Token) vom SHV.
+jeder Verein eigene Zugangsdaten (Club-ID und Passwort) vom SHV.
 
 - **Version:** siehe [CHANGELOG.md](CHANGELOG.md)
 - **Benötigt:** WordPress 6.0+, PHP 7.4+
-- **Ausgabe:** 8 Shortcodes und 8 dazu passende Gutenberg-Blöcke (kein Build-Schritt)
+- **Ausgabe:** 8 Shortcodes und 5 Gutenberg-Blöcke (kein Build-Schritt)
 - **Zusätzlich:** öffentliche REST-Endpunkte, `/spielplan.ics`, schema.org-Strukturdaten (JSON-LD)
 - **Lizenz:** GPL-2.0-or-later
 
@@ -41,8 +41,10 @@ jeder Verein eigene Zugangsdaten (Club-ID und Token) vom SHV.
    bricht WordPress mit einem Fatal Error ab.
 2. **Einstellungen → handball.ch Club-Widgets → Allgemein & API:**
    - **Club-ID** eintragen.
-   - **API-Token** eintragen: der Base64-kodierte String `ClubID:Secret`, den der SHV ausgibt. Er wird als
-     `Authorization: Basic <Token>` gesendet.
+   - **API-Passwort** eintragen: das Passwort (Secret), das der SHV zusammen mit der Club-ID ausstellt. Das Plugin
+     setzt daraus selbst den Base64-Token für die Basic-Auth zusammen (`Authorization: Basic <Base64 von ClubID:Secret>`).
+     Das gespeicherte Passwort wird im Formular nicht angezeigt; beim späteren Speichern lässt man das Feld leer,
+     um es zu behalten.
    - **Teams** zuordnen, eine Zeile pro Team im Format `slug=handball.ch-Team-ID` (z. B. `team1=12345`).
      Der Slug ist der Wert, den man später bei `team="…"` angibt. Die Team-ID steht in der URL des Teams auf handball.ch.
 3. Im Reiter **Diagnose** auf „Alle Team-IDs jetzt prüfen“ klicken. Jede ID sollte grün („gültig“) sein.
@@ -63,13 +65,14 @@ die neuen unter „Allgemein & API“ eintragen.
 | `[hbch_team_ranking team="team1"]` | `team` | Detaillierte Rangliste mit Logos, S/U/N, Toren und Auf-/Abstiegszonen (`#hbch-ranking-team`) |
 | `[hbch_team_next_games team="team1"]` | `team` | Noch nicht gespielte Spiele eines Teams (`#hbch-team-games-next`) |
 | `[hbch_team_last_games team="team1"]` | `team` | Gespielte Spiele eines Teams mit Resultat (`#hbch-team-games-last`) |
-| `[hbch_home_next_games limit="3" exclude="U13"]` | `limit`, `exclude` | Kommende Spiele über alle Teams des Vereins |
-| `[hbch_home_last_games limit="3" exclude="U13"]` | `limit`, `exclude` | Letzte Resultate über alle Teams des Vereins |
+| `[hbch_home_next_games limit="3" exclude="U13"]` | `limit`, `exclude`, `layout` | Kommende Spiele über alle Teams des Vereins |
+| `[hbch_home_last_games limit="3" exclude="U13"]` | `limit`, `exclude`, `layout` | Letzte Resultate über alle Teams des Vereins |
 | `[hbch_next_game team="team1"]` | `team` | Nächstes Spiel mit laufendem Countdown (Tage/Stunden/Minuten) |
 | `[hbch_ics team="team1" label="…"]` | `team`, `label` | „Kalender abonnieren“-Button mit Dropdown |
 
 - `limit`: Anzahl Spiele. Ohne Angabe gilt die Standard-Anzahl aus dem Reiter „Vereins-Spielplan“ (Default 3, maximal 50).
 - `exclude`: Freitext. Spiele, bei denen Teamname, Liga oder Gruppentext diesen Text enthalten, werden ausgeblendet.
+- `layout`: `cards` (Default, Kartenlook für die Startseite) oder `table` (Tabellenlook wie beim Team-Spielplan, mit Liga-Spalte).
 - `label`: überschreibt den Button-Text; leer = Text aus dem Reiter „ICS-Export“.
 - `team` beim ICS-Shortcode leer = ganzer Verein.
 
@@ -79,26 +82,20 @@ Shortcodes verwenden immer die **globalen Farben** (Reiter „Farben“). Farben
 
 ## Gutenberg-Blöcke
 
-Zu jedem Shortcode gibt es einen Block in der Kategorie **handball.ch Club-Widgets**. Die Blöcke sind dynamisch
-(Server-Side-Render, kein `save()`), im Editor erscheint die echte Ausgabe als Live-Vorschau. Team, Anzahl,
+Die Shortcodes gibt es auch als Blöcke in der Kategorie **handball.ch Club-Widgets**. Fünf Blöcke bündeln die acht
+Shortcodes; wo ein Block mehrere Shortcodes abdeckt, wählt man per Checkbox in der Seitenleiste. Die Blöcke sind
+dynamisch (Server-Side-Render, kein `save()`), im Editor erscheint die echte Ausgabe als Live-Vorschau. Team, Anzahl,
 Ausschluss-Text und Beschriftung stellt man in der Seitenleiste ein.
 
-| Block | Entspricht |
-|---|---|
-| `handballch/ranking` | `[hbch_ranking]` |
-| `handballch/team-ranking` | `[hbch_team_ranking]` |
-| `handballch/team-next-games` | `[hbch_team_next_games]` |
-| `handballch/team-last-games` | `[hbch_team_last_games]` |
-| `handballch/next-game` | `[hbch_next_game]` |
-| `handballch/home-next-games` | `[hbch_home_next_games]` |
-| `handballch/home-last-games` | `[hbch_home_last_games]` |
-| `handballch/ics-subscribe` | `[hbch_ics]` |
+| Block | Anzeigename | Entspricht |
+|---|---|---|
+| `handballch/ranking` | Rangliste | `[hbch_ranking]`, mit Checkbox „Detailliert“ `[hbch_team_ranking]` (optional mit Auf-/Abstiegszonen) |
+| `handballch/team-games` | Team – Spielplan / Resultate | `[hbch_team_next_games]` und/oder `[hbch_team_last_games]` (Checkboxen „Nächste Spiele“ / „Resultate“) |
+| `handballch/next-game` | Countdown (nächstes Spiel) | `[hbch_next_game]` |
+| `handballch/home-games` | Verein – Spielplan / Resultate | `[hbch_home_next_games]` und/oder `[hbch_home_last_games]`, Layout „Karten“ oder „Tabelle“ |
+| `handballch/ics-subscribe` | Kalender | `[hbch_ics]` |
 
-Im Block-Inserter erscheinen sie unter den Namen „Rangliste“, „Team – Spielplan / Resultate“,
-„Countdown (nächstes Spiel)“, „Verein – Spielplan / Resultate“ und „Kalender“ (Anzeigename, der eigentliche
-Blockname wie `handballch/ranking` bleibt gleich).
-
-**Farben pro Block:** Jeder Block hat in der Seitenleiste ein Panel „Farben“.Dort lassen sich die globalen Farben
+**Farben pro Block:** Jeder Block hat in der Seitenleiste ein Panel „Farben“. Dort lassen sich die globalen Farben
 nur für diesen einen Block überschreiben (z. B. eine andere Akzentfarbe für einen Countdown). Nicht gesetzte Farben
 übernehmen den globalen Wert. Welche Farben ein Block anbietet, hängt von seinem Inhalt ab.
 
@@ -110,14 +107,16 @@ zeigt der Block einen Hinweis mit Link zu den Einstellungen.
 ## ICS-Kalender
 
 - Ganzer Verein: `https://deine-domain.ch/spielplan.ics`
-- Einzelnes Team: `https://deine-domain.ch/spielplan.ics?team=team1`
+- Einzelnes Team: `https://deine-domain.ch/spielplan.ics?team=team1` (ein unbekannter Slug liefert eine 404-Seite)
 
 Der Dropdown-Button bietet: direkt abonnieren (`webcal://`, iPhone/Mac/Outlook), Google Kalender,
 Kalenderlink kopieren (Android), Datei herunterladen und – wo vom Browser unterstützt – Link teilen.
 
 Im Kalendereintrag lässt sich einstellen, ob Runde, Spielart und Halladresse in der Beschreibung stehen.
 Kalendername, Button-Text und die angenommene Spieldauer (für die Endzeit) sind im Reiter „ICS-Export“ einstellbar.
-Die Antwort trägt einen `Cache-Control`-Header passend zur Cache-Dauer (mindestens 5 Minuten).
+Die Zeiten stehen in UTC (`…Z`) im Kalender und werden von den Kalender-Apps in die Ortszeit umgerechnet.
+Forfait-Spiele werden nicht exportiert. Die Antwort trägt einen `Cache-Control`-Header passend zur Cache-Dauer
+(mindestens 5 Minuten).
 
 ---
 
@@ -134,9 +133,9 @@ Die Antwort trägt einen `Cache-Control`-Header passend zur Cache-Dauer (mindest
 |---|---|
 | `limit` | Anzahl (Default aus den Einstellungen, 1–50) |
 | `exclude` | Freitext-Filter wie beim Shortcode |
-| `source` | Optional: alternative Quell-URL. Nur `https://clubapi.handball.ch/…` wird akzeptiert, alles andere fällt auf die Vereins-URL zurück |
-| `include_live` | Nur `next-games`: ein gerade laufendes Spiel bleibt in der Liste |
+| `include_live` | Nur `next-games`, Boolean: ein gerade laufendes Spiel bleibt in der Liste |
 
+Die Quelle ist immer die Spielliste des eigenen Vereins; eine frei wählbare Quell-URL gibt es nicht.
 Forfait-Spiele werden nicht ausgeliefert. Die Antworten haben `Cache-Control: public, max-age=…`
 (Cache-Dauer der Vereins-Spielliste, mindestens 60 Sekunden).
 
@@ -149,7 +148,7 @@ im Code liest ausschliesslich `hbch_get_setting()` diese Option.
 
 | Reiter | Inhalt |
 |---|---|
-| **Allgemein & API** | Club-ID, API-Token, Team-Zuordnung, Team-ID-Prüfung, Vereins-Cache-Dauer, Logo-Cache-Dauer, Strukturdaten (SEO) |
+| **Allgemein & API** | Club-ID, API-Passwort, Team-Zuordnung, Team-ID-Prüfung, Vereins-Cache-Dauer, Logo-Cache-Dauer, Strukturdaten (SEO) |
 | **Rangliste** | Live-Vorschau, Spalten (pro Variante kompakt/detailliert an- und abschaltbar, gemeinsame Beschriftung), eigene Mannschaft hervorheben, Texte, Cache, CSS |
 | **Team-Spielplan** | Live-Vorschau, Felder pro Shortcode (nächste/letzte) an- und abschaltbar, „Auf Mobile anzeigen“, LIVE-Badge, Cache, CSS |
 | **Vereins-Spielplan** | Live-Vorschau, Felder der Startseiten-Widgets, Standard-Anzahl, CSS |
@@ -210,8 +209,12 @@ löscht sie sofort.
 | ICS-Kalender | 6 Stunden | Reiter ICS-Export |
 | Team-/Vereinslogos (lokale Kopie) | 30 Tage | Reiter Allgemein & API |
 
+Das fertige Ranglisten-HTML ist zusätzlich an eine Signatur der zugehörigen Einstellungen (Spalten, Doppel-Logo,
+Such-Text, Club-ID) gebunden: Ändert man eine davon, wird automatisch neu aufgebaut.
+
 **Logos:** Beim ersten Aufruf wird die Original-URL von handball.ch ausgeliefert (kein Warten), ein einmaliger
 WP-Cron-Job lädt die Datei nach `uploads/hbch-logo-cache/`. Ab dem nächsten Aufruf kommt die lokale Kopie.
+Gespeichert werden nur Dateien von `https://handball.ch/…`, die wirklich Bilder sind.
 
 **Assets:** `public.css` und das Frontend-JS werden nur auf Seiten geladen, die einen Shortcode oder Block dieses
 Plugins enthalten. Geprüft werden der Seiteninhalt, eingebundene wiederverwendbare Blöcke und die Widgets
@@ -223,7 +226,7 @@ erzwingen, siehe [Filter & Hooks](#filter--hooks).
 ## Besonderheiten der Ausgabe
 
 - **Eigene Mannschaft hervorheben:** Zeilen, deren Teamname den eingestellten Text enthält (z. B. der Vereinsname),
-  werden in beiden Ranglisten in der Akzentfarbe hervorgehoben. Leer = aus.
+  werden in beiden Ranglisten in der Akzentfarbe hervorgehoben (ohne Beachtung der Gross-/Kleinschreibung). Leer = aus.
 - **Spielgemeinschaften (SG):** Bei einer SG über zwei Vereine liefert handball.ch nur eine Club-ID. Ist der eigene
   Vereinstext (siehe oben) im Teamnamen enthalten, wird zusätzlich das eigene Logo daneben gezeigt (pro Widget abschaltbar).
 - **Auf-/Abstiegszonen:** Das Rang-Badge der detaillierten Rangliste wird nach den Zonengrössen aus
@@ -235,7 +238,8 @@ erzwingen, siehe [Filter & Hooks](#filter--hooks).
   `[hbch_home_last_games layout="table"]` (bzw. Block „Verein – Spielplan / Resultate“, Layout „Tabelle“) zeigen
   zusätzlich eine Liga-Spalte direkt nach Datum/Zeit, da hier Spiele mehrerer Ligen gemischt auftreten. Der
   Team-Spielplan hat diese Spalte nicht (dort immer nur eine Liga).
-- **Forfait:** Forfait-Spiele fehlen in den vereinsweiten Listen und im Countdown, im Team-Spielplan stehen sie mit
+- **Forfait:** Forfait-Spiele fehlen in den vereinsweiten Listen, im Countdown, im ICS-Kalender und in den
+  REST-Antworten. Im Team-Spielplan stehen sie mit Datum und „Forfait“-Badge statt Datum/Uhrzeit.
 - **Matchcenter-Link:** Das Icon wird pro Seite einmal als SVG-`<symbol>` ausgegeben und pro Zeile referenziert.
 - **Datumsformat:** Die Server geben rohe ISO-Zeiten aus, das Frontend-JS formatiert sie im Browser
   (`hbch-date-raw`/`hbch-time-raw`). Der Countdown rechnet die Schweizer Ortszeit serverseitig korrekt nach UTC um.
@@ -275,11 +279,11 @@ Weitere Hooks:
 | Symptom | Ursache / Lösung |
 |---|---|
 | Fatal Error „Failed opening required …“ | Unvollständiger Upload. Alle Dateien aus der `require_once`-Liste in `handballch-api.php` müssen im Plugin-Ordner liegen. Notfalls den Plugin-Ordner umbenennen (WordPress deaktiviert das Plugin), vollständig hochladen, zurückbenennen |
-| Hinweis „Bitte zuerst Club-ID und API-Token eintragen“ | Club-ID oder Token fehlt (Reiter „Allgemein & API“) |
-| „Rangliste momentan nicht verfügbar“ | Token falsch oder leer, API nicht erreichbar oder Team-ID veraltet. Diagnose → „Alle Team-IDs prüfen“, danach „Rohdaten live abrufen“ |
+| Hinweis „Bitte zuerst Club-ID und API-Passwort eintragen“ | Club-ID oder Passwort fehlt (Reiter „Allgemein & API“) |
+| „Rangliste momentan nicht verfügbar“ | Passwort falsch oder leer, API nicht erreichbar oder Team-ID veraltet. Diagnose → „Alle Team-IDs prüfen“, danach „Rohdaten live abrufen“ |
 | „Unbekanntes Team“ | Der Slug im Shortcode existiert nicht in den Einstellungen |
 | Daten sind veraltet | Diagnose → „Cache jetzt leeren“ (oder Cache-Dauer verkürzen) |
-| `/spielplan.ics` liefert 404 | Einstellungen → Permalinks → „Änderungen speichern“ |
+| `/spielplan.ics` liefert 404 | Einstellungen → Permalinks → „Änderungen speichern“. Bei `?team=…` zusätzlich prüfen, ob der Slug in den Einstellungen existiert |
 | Kein Styling / Countdown läuft nicht | Shortcode steht ausserhalb des Seiteninhalts, Filter `hbch_force_assets` setzen |
 | Farben fehlen oder sind falsch | `includes/frontend.php` und `assets/css/public.css` müssen beide auf demselben Stand sein (die `:root`-Variablen kommen aus `hbch_get_dynamic_inline_css()`). Danach Browser- und Seiten-Cache leeren |
 | Logos fehlen auf dem iPhone | Plugin aktualisieren und Cache leeren (kein natives `loading="lazy"` mehr, das sich mit JS-Lazy-Load-Plugins beisst) |
@@ -328,8 +332,12 @@ Deinstallation über das WordPress-Backend löscht die Plugin-Option, alle `hbch
   Hilfetext) und im CSS als `var(--…)` verwenden. Default, Adminfeld, Speichern und `:root`-Ausgabe ergeben sich daraus.
   Soll die Farbe pro Block überschreibbar sein, die Rollen-ID in `hbch_block_color_roles()` beim passenden Block ergänzen.
   Im Editor-JS ist nichts zu ändern (die Liste kommt aus PHP).
+- **Neuer Block:** in `blocks.php` (`hbch_register_block()`) und `assets/js/blocks-editor.js` registrieren **und** den
+  Blocknamen in `hbch_content_uses_plugin()` (`frontend.php`) aufnehmen, sonst lädt das Plugin auf Seiten mit nur diesem
+  Block kein CSS/JS.
 - Ändert sich die Struktur eines Einstellungs-Arrays, braucht es einen Migrationspfad für bestehende Installationen.
-- Zeit: `gameDateTime` von handball.ch ist naive Schweizer Ortszeit, immer mit `Europe/Zurich` parsen.
+- Zeit: `gameDateTime` von handball.ch ist naive Schweizer Ortszeit, immer mit `Europe/Zurich` parsen
+  (am besten über `hbch_game_datetime()`, das ungültige Werte abfängt).
 
 **Release-Checkliste**
 
