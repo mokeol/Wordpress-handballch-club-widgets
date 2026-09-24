@@ -6,8 +6,9 @@
  *
  * "Rangliste" hat eine Checkbox "Detailliert" (kompakt/detailliert) und,
  * wenn detailliert aktiv ist, zusätzlich "Auf-/Abstiegszonen farbig
- * markieren". "Team – Spielplan" und "Verein – Spielplan" haben je zwei
- * unabhängige Checkboxen ("Nächste Spiele" / "Resultate").
+ * markieren". "Team – Spielplan / Resultate" und "Verein – Spielplan /
+ * Resultate" haben je zwei unabhängige Checkboxen ("Nächste Spiele" /
+ * "Resultate").
  *
  * Jeder Block hat ausserdem ein Panel "Farben", das die globalen Farben nur
  * für diesen Block überschreibt. Die Farbliste kommt aus PHP
@@ -141,7 +142,7 @@
 	// detailliert aktiv) Checkbox "Auf-/Abstiegszonen farbig markieren".
 	( function () {
 		var name = 'handballch/ranking';
-		var title = __( 'handball.ch: Rangliste', 'handballch-api' );
+		var title = __( 'Rangliste', 'handballch-api' );
 		var icon = 'chart-bar';
 
 		blocks.registerBlockType( name, {
@@ -201,10 +202,10 @@
 		} );
 	} )();
 
-	// "Team – Spielplan": Team-Auswahl + Checkboxen "Nächste Spiele"/"Resultate".
+	// "Team – Spielplan / Resultate": Team-Auswahl + Checkboxen "Nächste Spiele"/"Resultate".
 	( function () {
 		var name = 'handballch/team-games';
-		var title = __( 'handball.ch: Team – Spielplan', 'handballch-api' );
+		var title = __( 'Team – Spielplan / Resultate', 'handballch-api' );
 		var icon = 'calendar-alt';
 
 		blocks.registerBlockType( name, {
@@ -252,7 +253,7 @@
 	// "Countdown (nächstes Spiel)": nur Team-Auswahl, keine Anzeige-Checkboxen.
 	( function () {
 		var name = 'handballch/next-game';
-		var title = __( 'handball.ch: Countdown (nächstes Spiel)', 'handballch-api' );
+		var title = __( 'Countdown (nächstes Spiel)', 'handballch-api' );
 		var icon = 'clock';
 
 		blocks.registerBlockType( name, {
@@ -292,12 +293,12 @@
 		} );
 	} )();
 
-	// "Verein – Spielplan": Layout, Anzahl, Ausschluss + Checkboxen.
+	// "Verein – Spielplan / Resultate": Layout, Anzahl, Ausschluss + Checkboxen.
 	( function () {
 		var name = 'handballch/home-games';
 
 		blocks.registerBlockType( name, {
-			title: __( 'handball.ch: Verein – Spielplan', 'handballch-api' ),
+			title: __( 'Verein – Spielplan / Resultate', 'handballch-api' ),
 			description: __( 'Nächste Spiele und/oder Resultate über alle Teams, per Checkbox wählbar.', 'handballch-api' ),
 			category: 'handballch-api',
 			icon: 'calendar',
@@ -351,7 +352,7 @@
 	} )();
 
 	blocks.registerBlockType( 'handballch/ics-subscribe', {
-		title: __( 'handball.ch: Kalender abonnieren', 'handballch-api' ),
+		title: __( 'Kalender', 'handballch-api' ),
 		description: __( '„Kalender abonnieren“-Button mit Dropdown (ICS/webcal, Google Kalender, Link).', 'handballch-api' ),
 		category: 'handballch-api',
 		icon: 'download',
