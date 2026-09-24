@@ -4,7 +4,7 @@ Tags: handball, sports, standings, fixtures, calendar
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.3
+Stable tag: 1.0.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -14,7 +14,7 @@ Standings, fixtures, results, countdown and calendar export for Swiss handball c
 
 Club Widgets for handball.ch shows the data of your handball club on your WordPress site, using the club API at clubapi.handball.ch. Everything is configured in one admin panel: teams, visible fields, texts, colors, cache duration and custom CSS.
 
-**This plugin is not affiliated with or endorsed by the Swiss Handball Federation (SHV).** To use the API, your club needs its own credentials (club ID and token) issued by the SHV.
+**This plugin is not affiliated with or endorsed by the Swiss Handball Federation (SHV).** To use the API, your club needs its own credentials (club ID and password) issued by the SHV.
 
 **Features**
 
@@ -27,7 +27,7 @@ Club Widgets for handball.ch shows the data of your handball club on your WordPr
 * Joint teams (two clubs) with both logos
 * schema.org structured data (SportsEvent, JSON-LD), can be switched off
 * Public read-only REST endpoints for upcoming and past games
-* Eight shortcodes and eight matching Gutenberg blocks, no build step required
+* Eight shortcodes and five Gutenberg blocks, no build step required
 * All colors editable as CSS variables, overridable per block
 * Scripts and styles load only on pages that use the plugin
 * Live preview, diagnostics and built-in documentation in the admin panel
@@ -53,7 +53,7 @@ This plugin connects to the following external services.
 
 **handball.ch club API (clubapi.handball.ch)**
 
-Used to load standings, fixtures, results and team data. Your server sends the club ID or team ID in the request URL and your API token in the `Authorization` header. No visitor data is sent. Responses are cached in the database for the durations set in the plugin settings. The service is operated by the Swiss Handball Federation (SHV): https://www.handball.ch
+Used to load standings, fixtures, results and team data. Your server sends the club ID or team ID in the request URL and your API credentials in the `Authorization` header. No visitor data is sent. Responses are cached in the database for the durations set in the plugin settings. The service is operated by the Swiss Handball Federation (SHV): https://www.handball.ch
 
 **handball.ch team logos (handball.ch/images/logo)**
 
@@ -71,7 +71,7 @@ The "subscribe" dropdown contains a link to Google Calendar. It is only followed
 
 1. Upload the `handballch-api` folder to `/wp-content/plugins/` or install the ZIP via Plugins > Add New.
 2. Activate the plugin. The permalinks are refreshed automatically so that `/spielplan.ics` works right away.
-3. Go to Settings > handball.ch Club Widgets > "Allgemein & API" and enter your club ID and API token (the Base64 string `ClubID:Secret` issued by the SHV).
+3. Go to Settings > handball.ch Club Widgets > "Allgemein & API" and enter your club ID and API password (the secret issued by the SHV together with the club ID). The plugin builds the Base64 token for the API itself.
 4. Add your teams, one per line, as `slug=team-ID` (for example `team1=12345`). The team ID is part of the team's URL on handball.ch.
 5. Open the "Diagnose" tab and click "Alle Team-IDs jetzt prüfen". Every ID should show as valid.
 6. Insert shortcodes or blocks on your pages.
@@ -80,13 +80,13 @@ Team IDs change every season. After a season change, check them again in the "Di
 
 == Frequently Asked Questions ==
 
-= Where do I get a club ID and token? =
+= Where do I get a club ID and password? =
 
 From the Swiss Handball Federation (SHV). The plugin cannot work without them.
 
 = The standings show "Rangliste momentan nicht verfügbar". =
 
-The token is wrong or empty, the API cannot be reached, or the team ID is outdated. Use the "Diagnose" tab to check all team IDs and to fetch the raw API response.
+The password is wrong or empty, the API cannot be reached, or the team ID is outdated. Use the "Diagnose" tab to check all team IDs and to fetch the raw API response.
 
 = The data is out of date. =
 
@@ -94,7 +94,7 @@ Clear the cache in the "Diagnose" tab, or shorten the cache duration in the sett
 
 = `/spielplan.ics` returns a 404 error. =
 
-Go to Settings > Permalinks and click "Save Changes".
+Go to Settings > Permalinks and click "Save Changes". With `?team=…`, also check that the slug exists in the settings.
 
 = There is no styling, or the countdown does not run. =
 
@@ -115,6 +115,15 @@ The API has no "running" status, so a game counts as live for 90 minutes after k
 No, it is built for the API of the Swiss Handball Federation.
 
 == Changelog ==
+= 1.0.4 =
+* Fixed: version constant was out of sync with the plugin header (stale CSS/JS caching).
+* Fixed: styles and scripts were not loaded on pages that only contain the "Team – Spielplan / Resultate" or "Verein – Spielplan / Resultate" blocks.
+* Fixed: after changing the standings columns, cached rows no longer match the header for up to 20 minutes.
+* Fixed: calendar dropdown "copy link" and "share" did not work when clicking the icon; share entry was visible without browser support.
+* ICS export: forfeited games are excluded, times are written in UTC, unknown team slugs return a 404 page.
+* Fixed: "&" in the venue name of the countdown; highlighting of the own team is now case-insensitive and handles special characters.
+* Fixed: a single invalid date value from the API could cause a fatal error.
+* Security: removed the REST parameter `source`; REST parameters are sanitized; the API password is no longer printed into the settings form (leave empty to keep it); authenticated requests do not follow redirects; the logo download only accepts real images from handball.ch.
 = 1.0.3 =
 * Club-wide fixtures/results table layout now shows the league per game (a new column right after date/time), since this view mixes several leagues. The per-team schedule is unaffected (always a single league there).
 * Renamed the Gutenberg blocks as they appear in the block inserter (display names only, the underlying block names and existing pages are unaffected).
