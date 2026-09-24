@@ -4,6 +4,33 @@ Die Versionshistorie steht in dieser Datei; der Reiter „Changelog“ im Adminp
 Bei jedem Release: Header-Version **und** Konstante `HBCH_VERSION` in `handballch-api.php` gemeinsam anpassen.
 Der Dateiname muss exakt `CHANGELOG.md` lauten (auf Linux-Servern case-sensitive).
 
+## 1.0.5 — Robusterer Cache, weniger JavaScript, Aufräumen
+- Neu: Cache-Versionszähler. Jeder Transient-Schlüssel enthält die Version, „Cache jetzt leeren“ zählt sie hoch. Das
+  funktioniert auch mit externem Object-Cache (Redis/Memcached). Beim Speichern der Einstellungen wird der Cache
+  automatisch geleert.
+- Neu: „Letzte gute Kopie“. Antwortet die API nicht, zeigt das Plugin die zuletzt geladenen Daten (bis zu 7 Tage, Filter
+  `hbch_stale_cache_seconds`) statt „Rangliste momentan nicht verfügbar“. Ein kurzer Fehler-Marker (60 Sekunden)
+  verhindert, dass jeder Seitenaufruf 5–8 Sekunden auf die API wartet.
+- Das fertige Ranglisten-HTML wird nicht mehr separat gecacht (die Rohdaten sind es bereits). Spaltenänderungen wirken
+  dadurch sofort, die Cache-Signatur aus 1.0.4 entfällt.
+- Datum und Uhrzeit werden serverseitig formatiert (Europe/Zurich, deutsche Monats- und Wochentage). Das bisherige
+  Datums-JavaScript entfällt: kein Layout-Sprung mehr, auch ohne JavaScript lesbar.
+- „Eigene Mannschaft hervorheben“ passiert serverseitig (ohne Beachtung der Gross-/Kleinschreibung).
+- Countdown: Datum, Halle und Startwerte kommen vom Server, ein leerer Hallenname hängt keinen Trennpunkt mehr an.
+- Alle Inline-Scripts im Frontend (Datum, Hervorhebung, Countdown, Kalender-Dropdown) liegen in `assets/js/public.js`
+  (vom Browser cachebar, WordPress.org-tauglich).
+- Alte Blocknamen (`handballch/team-ranking`, `team-next-games`, `team-last-games`, `home-next-games`,
+  `home-last-games`) werden im Frontend auf die neuen Blöcke umgeleitet und im Editor zum Umwandeln angeboten
+  (`assets/js/blocks-legacy.js`, Liste in `hbch_legacy_block_map()`). Die Asset-Erkennung kennt sie ebenfalls.
+- Logos: Ein Logo, das sich nicht laden lässt, wird 1 Tag lang nicht erneut geplant. Die Prüfung der lokalen Datei
+  läuft pro Logo nur einmal je Seitenaufruf.
+- Aufräumen: reine Funktionen `hbch_get_next_games()` / `hbch_get_last_games()` statt interner REST-Requests,
+  `hbch_render_next_game()` und `hbch_render_ics_button()` statt `do_shortcode()` in den Blöcken,
+  `hbch_is_game_played()` statt fünfmal `stripos()`, Spiele werden per Zeichenkettenvergleich sortiert.
+- Aufräumen: ungenutzte CSS-Regeln entfernt, Klassen-Hinweise im Reiter „Vereins-Spielplan“ aktualisiert,
+  `wp_delete_file()` statt `@unlink()`.
+- `uninstall.php` entfernt auch die Cache-Versions-Option.
+
 ## 1.0.4 — Fehlerbehebungen & Sicherheit
 - Behoben: `HBCH_VERSION` stand noch auf `1.0.2` (Header: `1.0.3`); Browser konnten dadurch veraltetes CSS/JS behalten.
 - Behoben: Auf Seiten, die nur die Blöcke „Team – Spielplan / Resultate“ oder „Verein – Spielplan / Resultate“
