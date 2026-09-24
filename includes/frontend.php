@@ -31,21 +31,28 @@ function hbch_get_dynamic_inline_css() {
  * JS-Rumpf (ohne <script>-Tags) für die Hervorhebung der eigenen Mannschaft
  * und das Entfernen fremdgesetzter title-Attribute an Team-Logos. Wird im
  * Frontend und nach jeder Live-Vorschau im Adminpanel ausgegeben.
+ *
+ * Der Such-Text wird per wp_json_encode() als JS-String ausgegeben (esc_js()
+ * ist für HTML-Attribute gedacht und würde z. B. "&" in "&amp;" umwandeln).
+ * Verglichen wird ohne Beachtung der Gross-/Kleinschreibung, wie bei der
+ * Erkennung von Spielgemeinschaften (hbch_team_logo_markup()).
  */
 function hbch_get_highlight_js_body() {
 	$enabled    = (bool) hbch_get_setting( 'highlight_own_team_enabled' );
 	$match_text = (string) hbch_get_setting( 'highlight_own_team_text' );
+	$match_json = wp_json_encode( $match_text, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT );
 
 	ob_start();
 	?>
-	<?php if ( $enabled && $match_text !== '' ) : ?>
+	<?php if ( $enabled && $match_text !== '' && $match_json ) : ?>
+	var hbchOwnTeam = <?php echo $match_json; ?>.toLowerCase();
 	document.querySelectorAll('#hbch-ranking-team td').forEach(function (td) {
-		if (td.textContent.includes('<?php echo esc_js( $match_text ); ?>')) {
+		if (td.textContent.toLowerCase().includes(hbchOwnTeam)) {
 			td.closest('tr').classList.add('hbch-row-highlight');
 		}
 	});
 	document.querySelectorAll('#hbch-ranking-mini td').forEach(function (td) {
-		if (td.textContent.includes('<?php echo esc_js( $match_text ); ?>')) {
+		if (td.textContent.toLowerCase().includes(hbchOwnTeam)) {
 			td.closest('tr').classList.add('hbch-row-highlight-mini');
 		}
 	});
@@ -81,6 +88,7 @@ add_filter( 'the_content', 'hbch_strip_logo_title_attributes', PHP_INT_MAX );
 
 /**
  * Enthält ein post_content-String einen Shortcode oder Block des Plugins?
+ * Die Blocknamen müssen zu blocks.php passen (fünf Blöcke).
  */
 function hbch_content_uses_plugin( $content ) {
 	if ( $content === '' ) {
@@ -92,9 +100,8 @@ function hbch_content_uses_plugin( $content ) {
 		'hbch_home_next_games', 'hbch_home_last_games', 'hbch_next_game', 'hbch_ics',
 	];
 	static $blocks = [
-		'handballch/ranking', 'handballch/team-ranking', 'handballch/team-next-games',
-		'handballch/team-last-games', 'handballch/next-game', 'handballch/home-next-games',
-		'handballch/home-last-games', 'handballch/ics-subscribe',
+		'handballch/ranking', 'handballch/team-games', 'handballch/next-game',
+		'handballch/home-games', 'handballch/ics-subscribe',
 	];
 
 	foreach ( $shortcodes as $sc ) {
