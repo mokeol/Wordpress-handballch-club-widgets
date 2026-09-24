@@ -3,14 +3,13 @@
  * includes/ics.php
  *
  * ICS-Kalender-Export (/spielplan.ics, optional ?team=slug) und der
- * Shortcode [hbch_ics] mit Abo-Dropdown.
+ * Shortcode [hbch_ics] mit Abo-Dropdown. Das JavaScript des Dropdowns
+ * (Öffnen, Link kopieren, Teilen) liegt in assets/js/public.js.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
-
-define( 'HBCH_ICS_CACHE_KEY', 'hbch_ics_cached_calendar' );
 
 function hbch_ics_register_rewrite_rule() {
 	add_rewrite_rule( '^spielplan\.ics$', 'index.php?hbch_ics_download=1', 'top' );
@@ -69,7 +68,6 @@ function hbch_ics_build( array $games, string $calendar_name = '' ): string {
 	$duration_minutes = hbch_get_setting( 'ics_game_duration_minutes' );
 	$uid_host         = wp_parse_url( home_url(), PHP_URL_HOST ) ?: 'localhost';
 
-	$tz  = new DateTimeZone( 'Europe/Zurich' );
 	$utc = new DateTimeZone( 'UTC' );
 	$now = new DateTime( 'now', $utc );
 
@@ -87,13 +85,13 @@ function hbch_ics_build( array $games, string $calendar_name = '' ): string {
 	$show_addr  = (bool) hbch_get_setting( 'ics_show_venue_address' );
 
 	foreach ( $games as $game ) {
-		if ( empty( $game['gameDateTime'] ) || hbch_is_game_forfait( $game ) ) {
+		if ( hbch_is_game_forfait( $game ) ) {
 			continue;
 		}
 
-		try {
-			$start = new DateTime( $game['gameDateTime'], $tz );
-		} catch ( Exception $e ) {
+		// Ungültige oder fehlende Datumswerte überspringen.
+		$start = hbch_game_datetime( $game );
+		if ( ! $start ) {
 			continue;
 		}
 
@@ -191,8 +189,15 @@ function hbch_ics_generate( string $team_slug = '' ): string {
 	return hbch_ics_build( $games, $calendar_name );
 }
 
+/**
+ * Transient-Schlüssel eines Kalenders (mit Cache-Version, siehe api.php).
+ */
+function hbch_ics_cache_key( string $team_slug = '' ): string {
+	return hbch_cache_key( $team_slug !== '' ? 'ics_team_' . sanitize_key( $team_slug ) : 'ics_club' );
+}
+
 function hbch_ics_get_cached( string $team_slug = '' ): string {
-	$cache_key = HBCH_ICS_CACHE_KEY . ( $team_slug !== '' ? '_' . sanitize_key( $team_slug ) : '_verein' );
+	$cache_key = hbch_ics_cache_key( $team_slug );
 
 	$cached = get_transient( $cache_key );
 	if ( $cached !== false ) {
@@ -213,12 +218,12 @@ function hbch_ics_get_cached( string $team_slug = '' ): string {
  */
 add_action( 'hbch_ics_clear_cache', function ( $team_slug = '' ) {
 	if ( $team_slug !== '' ) {
-		delete_transient( HBCH_ICS_CACHE_KEY . '_' . sanitize_key( $team_slug ) );
+		delete_transient( hbch_ics_cache_key( $team_slug ) );
 		return;
 	}
-	delete_transient( HBCH_ICS_CACHE_KEY . '_verein' );
+	delete_transient( hbch_ics_cache_key() );
 	foreach ( array_keys( hbch_get_setting( 'teams' ) ) as $slug ) {
-		delete_transient( HBCH_ICS_CACHE_KEY . '_' . sanitize_key( $slug ) );
+		delete_transient( hbch_ics_cache_key( $slug ) );
 	}
 } );
 
@@ -247,24 +252,21 @@ add_action( 'template_redirect', function () {
 	header( 'Cache-Control: public, max-age=' . $max_age );
 	header( 'Content-Type: text/calendar; charset=utf-8' );
 	header( 'Content-Disposition: inline; filename="' . $filename . '"' );
-	echo $ics;
+	echo $ics; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ICS-Text (text/calendar), Werte sind über hbch_ics_escape() maskiert.
 	exit;
 } );
 
 /**
- * [hbch_ics team="slug" label="Text"] — "Kalender abonnieren"-Button mit
- * Dropdown. Ohne team gilt der ganze Verein.
+ * "Kalender abonnieren"-Button mit Dropdown. Ohne $team_slug gilt der ganze
+ * Verein, ein leerer $label nimmt den Text aus den Einstellungen. Wird von
+ * [hbch_ics] und dem Block "Kalender" direkt aufgerufen.
  */
-add_shortcode( 'hbch_ics', function ( $atts ) {
-	global $hbch_ics_shortcode_used;
-	$hbch_ics_shortcode_used = true;
-
-	$atts = shortcode_atts( [
-		'team'  => '',
-		'label' => hbch_get_setting( 'text_ics_button_label' ),
-	], $atts, 'hbch_ics' );
-
-	$team_slug = sanitize_key( $atts['team'] );
+function hbch_render_ics_button( $team_slug = '', $label = '' ) {
+	$team_slug = sanitize_key( (string) $team_slug );
+	$label     = trim( (string) $label );
+	if ( $label === '' ) {
+		$label = (string) hbch_get_setting( 'text_ics_button_label' );
+	}
 
 	$ics_url = home_url( '/spielplan.ics' );
 	if ( $team_slug !== '' ) {
@@ -279,7 +281,7 @@ add_shortcode( 'hbch_ics', function ( $atts ) {
 	?>
 	<div class="hbch-ics-dropdown">
 		<button type="button" class="hbch-ics-dropdown-toggle" aria-expanded="false">
-			<?php echo esc_html( $atts['label'] ); ?>
+			<?php echo esc_html( $label ); ?>
 		</button>
 
 		<ul class="hbch-ics-dropdown-menu" hidden>
@@ -304,7 +306,7 @@ add_shortcode( 'hbch_ics', function ( $atts ) {
 				</a>
 			</li>
 			<li>
-				<?php /* hidden + display:none: die Klasse .hbch-ics-dropdown-item setzt display:block und würde das hidden-Attribut sonst überstimmen. */ ?>
+				<?php /* hidden + display:none: die Klasse .hbch-ics-dropdown-item setzt display:block und würde das hidden-Attribut sonst überstimmen. public.js zeigt den Button, wenn der Browser navigator.share kann. */ ?>
 				<button type="button" class="hbch-ics-dropdown-item hbch-ics-share-btn" hidden style="display:none" data-url="<?php echo esc_attr( $ics_url ); ?>" data-title="<?php echo esc_attr( hbch_get_setting( 'text_ics_calendar_name' ) ); ?>">
 					<span class="hbch-ics-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg></span>  Kalenderlink teilen (WhatsApp, Mail, …)
 				</button>
@@ -315,89 +317,13 @@ add_shortcode( 'hbch_ics', function ( $atts ) {
 	</div>
 	<?php
 	return ob_get_clean();
-} );
+}
 
-add_action( 'wp_footer', function () {
-	global $hbch_ics_shortcode_used;
-	if ( empty( $hbch_ics_shortcode_used ) ) {
-		return;
-	}
-	?>
-	<script>
-	(function () {
-		if (navigator.share) {
-			document.querySelectorAll('.hbch-ics-share-btn').forEach(function (btn) {
-				btn.hidden = false;
-				btn.style.display = '';
-			});
-		}
-
-		// Zwischenablage: moderner Weg nur in sicheren Kontexten (https), sonst Fallback.
-		function copyText(text) {
-			if (navigator.clipboard && window.isSecureContext) {
-				return navigator.clipboard.writeText(text);
-			}
-			return new Promise(function (resolve, reject) {
-				var ta = document.createElement('textarea');
-				ta.value = text;
-				ta.setAttribute('readonly', '');
-				ta.style.position = 'fixed';
-				ta.style.opacity = '0';
-				document.body.appendChild(ta);
-				ta.select();
-				var ok = false;
-				try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
-				document.body.removeChild(ta);
-				ok ? resolve() : reject();
-			});
-		}
-
-		document.addEventListener('click', function (e) {
-			var toggle = e.target.closest('.hbch-ics-dropdown-toggle');
-			if (toggle) {
-				var menu = toggle.nextElementSibling;
-				var isOpen = !menu.hidden;
-				menu.hidden = isOpen;
-				toggle.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
-				return;
-			}
-
-			if (!e.target.closest('.hbch-ics-dropdown')) {
-				document.querySelectorAll('.hbch-ics-dropdown-menu').forEach(function (menu) {
-					menu.hidden = true;
-				});
-				document.querySelectorAll('.hbch-ics-dropdown-toggle').forEach(function (btn) {
-					btn.setAttribute('aria-expanded', 'false');
-				});
-				return;
-			}
-
-			// closest(): der Klick kann auf dem Icon oder Text im Button landen.
-			var copyBtn = e.target.closest('.hbch-ics-copy-btn');
-			if (copyBtn) {
-				var el = document.getElementById(copyBtn.dataset.target);
-				if (!el) return;
-				var label = copyBtn.querySelector('.hbch-ics-label');
-				if (label && !label.dataset.original) {
-					label.dataset.original = label.textContent;
-				}
-				copyText(el.textContent.trim()).then(function () {
-					if (!label) return;
-					label.textContent = 'Kopiert!';
-					setTimeout(function () { label.textContent = label.dataset.original; }, 1500);
-				}).catch(function () {});
-				return;
-			}
-
-			var shareBtn = e.target.closest('.hbch-ics-share-btn');
-			if (shareBtn && navigator.share) {
-				navigator.share({
-					title: shareBtn.dataset.title,
-					url: shareBtn.dataset.url
-				}).catch(function () {});
-			}
-		});
-	})();
-	</script>
-	<?php
+/**
+ * [hbch_ics team="slug" label="Text"] — "Kalender abonnieren"-Button mit
+ * Dropdown. Ohne team gilt der ganze Verein.
+ */
+add_shortcode( 'hbch_ics', function ( $atts ) {
+	$atts = shortcode_atts( [ 'team' => '', 'label' => '' ], $atts, 'hbch_ics' );
+	return hbch_render_ics_button( $atts['team'], $atts['label'] );
 } );
