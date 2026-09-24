@@ -2,8 +2,9 @@
 /**
  * includes/api.php
  *
- * Helfer für die clubapi.handball.ch-API: Fetch, Caching (Transients),
- * Sortierung, Logos, Live-/Forfait-Erkennung, Strukturdaten.
+ * Helfer für die clubapi.handball.ch-API: Fetch, Caching (Transients mit
+ * Versionszähler, "letzte gute Kopie" und kurzem Negativ-Cache), Sortierung,
+ * Logos, Live-/Forfait-/Gespielt-Erkennung, Datumsformat, Strukturdaten.
  *
  * Der API-Token ist ein Base64-String "ClubID:Secret" und wird als
  * HTTP-Basic-Auth gesendet ("Authorization: Basic <Token>").
@@ -11,6 +12,69 @@
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
+}
+
+/* ------------------------------------------------------------------------
+ * Cache: Versionszähler, Leeren, API-Abruf mit Stale-Fallback
+ * ---------------------------------------------------------------------- */
+
+/**
+ * Aktuelle Cache-Version. Sie ist Teil jedes Transient-Schlüssels
+ * (hbch_cache_key()): Hochzählen macht alle alten Einträge unsichtbar, auch
+ * bei externem Object-Cache (Redis/Memcached), wo ein SQL-Löschen nichts
+ * bewirken würde. $reset = true liest den Wert neu aus der Datenbank.
+ */
+function hbch_cache_version( $reset = false ) {
+	static $version = null;
+	if ( $reset ) {
+		$version = null;
+	}
+	if ( $version === null ) {
+		$version = max( 1, (int) get_option( 'hbch_cache_version', 1 ) );
+	}
+	return $version;
+}
+
+/**
+ * Transient-Schlüssel mit Präfix "hbch_" und Cache-Version.
+ */
+function hbch_cache_key( $name ) {
+	return 'hbch_v' . hbch_cache_version() . '_' . $name;
+}
+
+/**
+ * Leert den ganzen Plugin-Cache: zählt die Version hoch (wirkt überall) und
+ * räumt zusätzlich die nun verwaisten Transients aus der Datenbank.
+ * Gibt die Zahl der entfernten Datenbank-Einträge zurück.
+ */
+function hbch_flush_cache() {
+	global $wpdb;
+
+	update_option( 'hbch_cache_version', hbch_cache_version() + 1, true );
+	hbch_cache_version( true );
+
+	$rows = $wpdb->query(
+		$wpdb->prepare(
+			"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+			$wpdb->esc_like( '_transient_hbch_' ) . '%',
+			$wpdb->esc_like( '_transient_timeout_hbch_' ) . '%'
+		)
+	);
+
+	return (int) ( (int) $rows / 2 );
+}
+
+// Beim Speichern der Einstellungen alles neu aufbauen lassen (Spalten, Felder,
+// Club-ID usw. wirken sich auf Ausgabe und Abrufe aus).
+add_action( 'update_option_hbch_settings', 'hbch_flush_cache' );
+add_action( 'add_option_hbch_settings', 'hbch_flush_cache' );
+
+/**
+ * Wie lange die "letzte gute Kopie" einer API-Antwort aufgehoben wird, wenn die
+ * API nicht antwortet (Default 7 Tage). Filter: hbch_stale_cache_seconds.
+ */
+function hbch_stale_seconds() {
+	return max( HOUR_IN_SECONDS, (int) apply_filters( 'hbch_stale_cache_seconds', 7 * DAY_IN_SECONDS ) );
 }
 
 function hbch_api_auth_header() {
@@ -26,12 +90,96 @@ function hbch_ssl_verify() {
 }
 
 /**
+ * Ein authentifizierter GET auf die API. Liefert die dekodierte JSON-Antwort
+ * (Array) oder null bei Fehler. Anfragen mit Authorization-Header folgen keinen
+ * Weiterleitungen ("redirection" => 0), damit die Zugangsdaten nie an ein
+ * anderes Ziel gehen.
+ */
+function hbch_api_request_json( $url, $timeout = 5 ) {
+	$response = wp_remote_get( $url, [
+		'timeout'     => $timeout,
+		'sslverify'   => hbch_ssl_verify(),
+		'redirection' => 0,
+		'headers'     => hbch_api_auth_header(),
+	] );
+
+	if ( is_wp_error( $response ) ) {
+		return null;
+	}
+	$code = wp_remote_retrieve_response_code( $response );
+	if ( $code < 200 || $code >= 300 ) {
+		return null;
+	}
+
+	$data = json_decode( wp_remote_retrieve_body( $response ), true );
+	return is_array( $data ) ? $data : null;
+}
+
+/**
+ * Gecachter API-Abruf mit Stale-Fallback und Negativ-Cache.
+ *
+ * - Eine Kopie pro Schlüssel (Transient, hbch_stale_seconds() lang) mit
+ *   Zeitstempel. Jünger als $minutes = frisch, wird direkt geliefert.
+ * - Sonst neuer Abruf. Klappt er, wird die Kopie ersetzt.
+ * - Klappt er nicht, merkt sich ein Negativ-Marker 60 Sekunden lang den
+ *   Fehler (kein blockierender Neuversuch bei jedem Seitenaufruf), und es wird
+ *   die letzte gute Kopie geliefert, falls vorhanden.
+ *
+ * Rückgabe: Array oder null (keine Daten und kein Abruf möglich).
+ */
+function hbch_api_get_json( $url, $cache_name, $minutes, $timeout = 5 ) {
+	static $request_cache = [];
+
+	$key = hbch_cache_key( $cache_name );
+	if ( array_key_exists( $key, $request_cache ) ) {
+		return $request_cache[ $key ];
+	}
+
+	$stored = get_transient( $key );
+	if ( ! is_array( $stored ) || ! isset( $stored['time'] ) || ! array_key_exists( 'data', $stored ) ) {
+		$stored = null;
+	}
+
+	$ttl = max( 1, (int) $minutes ) * MINUTE_IN_SECONDS;
+	if ( $stored && ( time() - (int) $stored['time'] ) < $ttl ) {
+		return $request_cache[ $key ] = $stored['data'];
+	}
+
+	$fail_key = $key . '_fail';
+	$data     = null;
+	if ( get_transient( $fail_key ) === false ) {
+		$data = hbch_api_request_json( $url, $timeout );
+		if ( $data === null ) {
+			set_transient( $fail_key, 1, MINUTE_IN_SECONDS );
+		}
+	}
+
+	if ( $data !== null ) {
+		set_transient( $key, [ 'time' => time(), 'data' => $data ], hbch_stale_seconds() );
+		return $request_cache[ $key ] = $data;
+	}
+
+	return $request_cache[ $key ] = ( $stored ? $stored['data'] : null );
+}
+
+/* ------------------------------------------------------------------------
+ * Spiel-Helfer: Status, Zeit, Datumsformat
+ * ---------------------------------------------------------------------- */
+
+/**
  * Forfait-Spiel: gameStatus enthält "Forfait". Solche Spiele werden in
  * vereinsweiten Listen und im Countdown ausgeblendet, im Team-Spielplan
  * gekennzeichnet und weder als "live" noch als SportsEvent ausgegeben.
  */
 function hbch_is_game_forfait( $game ) {
 	return stripos( (string) ( $game['gameStatus'] ?? '' ), 'Forfait' ) !== false;
+}
+
+/**
+ * Gespielt: gameStatus enthält "Gespielt".
+ */
+function hbch_is_game_played( $game ) {
+	return stripos( (string) ( $game['gameStatus'] ?? '' ), 'Gespielt' ) !== false;
 }
 
 /**
@@ -58,6 +206,47 @@ function hbch_game_datetime( $game ) {
 	}
 }
 
+function hbch_weekday_name( DateTime $dt ) {
+	$names = [ 1 => 'Montag', 2 => 'Dienstag', 3 => 'Mittwoch', 4 => 'Donnerstag', 5 => 'Freitag', 6 => 'Samstag', 7 => 'Sonntag' ];
+	return $names[ (int) $dt->format( 'N' ) ];
+}
+
+function hbch_month_name( DateTime $dt ) {
+	$names = [ 1 => 'Januar', 2 => 'Februar', 3 => 'März', 4 => 'April', 5 => 'Mai', 6 => 'Juni', 7 => 'Juli', 8 => 'August', 9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Dezember' ];
+	return $names[ (int) $dt->format( 'n' ) ];
+}
+
+/**
+ * Spieldatum als Text (Schweizer Ortszeit, unabhängig von der Website-Sprache).
+ * $style: 'short' = 24.09.26, 'numeric' = 24.9.2026,
+ * 'long' = 24. September 2026, 'weekday' = Samstag, 26. September.
+ * Leer bei fehlendem/ungültigem Datum. Die Ausgabe ist NICHT escaped.
+ */
+function hbch_format_game_date( $game, $style = 'short' ) {
+	$dt = hbch_game_datetime( $game );
+	if ( ! $dt ) {
+		return '';
+	}
+	switch ( $style ) {
+		case 'numeric':
+			return $dt->format( 'j.n.Y' );
+		case 'long':
+			return $dt->format( 'j' ) . '. ' . hbch_month_name( $dt ) . ' ' . $dt->format( 'Y' );
+		case 'weekday':
+			return hbch_weekday_name( $dt ) . ', ' . $dt->format( 'j' ) . '. ' . hbch_month_name( $dt );
+		default:
+			return $dt->format( 'd.m.y' );
+	}
+}
+
+/**
+ * Anpfiffzeit als "HH:MM" (nicht escaped), leer bei ungültigem Datum.
+ */
+function hbch_format_game_time( $game ) {
+	$dt = hbch_game_datetime( $game );
+	return $dt ? $dt->format( 'H:i' ) : '';
+}
+
 /**
  * Läuft das Spiel gerade? Die API liefert keinen "läuft"-Status, deshalb
  * zeitbasiert: Anpfiff liegt in der Vergangenheit, aber innerhalb der
@@ -65,25 +254,16 @@ function hbch_game_datetime( $game ) {
  * "Gespielt". Anpassbar per Filter: hbch_live_game_duration_minutes.
  */
 function hbch_is_game_live( $game ) {
-	static $tz = null;
-	if ( $tz === null ) {
-		$tz = new DateTimeZone( 'Europe/Zurich' );
-	}
-
-	if ( stripos( $game['gameStatus'] ?? '', 'Gespielt' ) !== false || hbch_is_game_forfait( $game ) ) {
-		return false;
-	}
-	if ( empty( $game['gameDateTime'] ) ) {
+	if ( hbch_is_game_played( $game ) || hbch_is_game_forfait( $game ) ) {
 		return false;
 	}
 
-	try {
-		$kickoff = new DateTime( $game['gameDateTime'], $tz );
-	} catch ( Exception $e ) {
+	$kickoff = hbch_game_datetime( $game );
+	if ( ! $kickoff ) {
 		return false;
 	}
-	$now = new DateTime( 'now', $tz );
 
+	$now = new DateTime( 'now', $kickoff->getTimezone() );
 	if ( $now < $kickoff ) {
 		return false;
 	}
@@ -128,15 +308,14 @@ function hbch_matchcenter_link_markup( $game_id ) {
  *   (EventRescheduled bräuchte previousStartDate, das die API nicht liefert).
  */
 function hbch_game_jsonld( $game ) {
-	if ( empty( $game['gameDateTime'] ) || hbch_is_game_forfait( $game ) ) {
+	if ( hbch_is_game_forfait( $game ) ) {
 		return null;
 	}
-	try {
-		$start = new DateTime( $game['gameDateTime'], new DateTimeZone( 'Europe/Zurich' ) );
-		$now   = new DateTime( 'now', new DateTimeZone( 'Europe/Zurich' ) );
-	} catch ( Exception $e ) {
+	$start = hbch_game_datetime( $game );
+	if ( ! $start ) {
 		return null;
 	}
+	$now = new DateTime( 'now', $start->getTimezone() );
 
 	$team_a = trim( (string) ( $game['teamAName'] ?? '' ) );
 	$team_b = trim( (string) ( $game['teamBName'] ?? '' ) );
@@ -312,73 +491,29 @@ function hbch_team_name_markup( $full, $short, $use_short_on_mobile ) {
 
 /**
  * Sortiert Spiele nach Datum und Uhrzeit. $desc = true: neueste zuerst.
+ * gameDateTime ist ein naiver ISO-String (immer Schweizer Ortszeit), daher
+ * genügt der Zeichenkettenvergleich, ohne DateTime-Objekte.
  */
 function hbch_sort_games_by_datetime( $games, $desc = false ) {
-	static $tz = null;
-	if ( $tz === null ) {
-		$tz = new DateTimeZone( 'Europe/Zurich' );
-	}
-
-	$decorated = [];
-	foreach ( $games as $game ) {
-		$raw = $game['gameDateTime'] ?? '';
-		try {
-			$ts = $raw !== '' ? ( new DateTime( $raw, $tz ) )->getTimestamp() : 0;
-		} catch ( Exception $e ) {
-			$ts = 0;
-		}
-		$decorated[] = [ $ts, $game ];
-	}
-	usort( $decorated, function ( $a, $b ) use ( $desc ) {
-		$cmp = $a[0] <=> $b[0];
+	$games = array_values( $games );
+	usort( $games, function ( $a, $b ) use ( $desc ) {
+		$cmp = strcmp( (string) ( $a['gameDateTime'] ?? '' ), (string) ( $b['gameDateTime'] ?? '' ) );
 		return $desc ? -$cmp : $cmp;
 	} );
-	return array_map( function ( $d ) { return $d[1]; }, $decorated );
+	return $games;
 }
 
 /**
  * Gecachter Fetch der Vereins-Spielliste (Startseite, Countdown, ICS, REST).
- * Ohne Quelle (keine Club-ID gesetzt) kommt eine leere Liste zurück.
- * Anfragen mit Authorization-Header folgen keinen Weiterleitungen
- * ("redirection" => 0), damit die Zugangsdaten nie an ein anderes Ziel gehen.
+ * Ohne Quelle (keine Club-ID gesetzt) kommt eine leere Liste zurück. Bei
+ * API-Ausfall wird die letzte gute Kopie geliefert (siehe hbch_api_get_json()).
  */
 function hbch_fetch_club_games( $source ) {
-	static $request_cache = [];
 	if ( $source === '' ) {
 		return [];
 	}
-	if ( array_key_exists( $source, $request_cache ) ) {
-		return $request_cache[ $source ];
-	}
-
-	$cache_key = 'hbch_club_games_' . md5( $source );
-	$cached    = get_transient( $cache_key );
-	if ( $cached !== false ) {
-		return $request_cache[ $source ] = $cached;
-	}
-
-	$response = wp_remote_get( $source, [
-		'timeout'     => 8,
-		'sslverify'   => hbch_ssl_verify(),
-		'redirection' => 0,
-		'headers'     => hbch_api_auth_header(),
-	] );
-
-	if ( is_wp_error( $response ) ) {
-		return $request_cache[ $source ] = [];
-	}
-	$code = wp_remote_retrieve_response_code( $response );
-	if ( $code < 200 || $code >= 300 ) {
-		return $request_cache[ $source ] = [];
-	}
-
-	$games = json_decode( wp_remote_retrieve_body( $response ), true );
-	if ( ! is_array( $games ) ) {
-		return $request_cache[ $source ] = [];
-	}
-
-	set_transient( $cache_key, $games, hbch_get_setting( 'cache_club_games_minutes' ) * MINUTE_IN_SECONDS );
-	return $request_cache[ $source ] = $games;
+	$games = hbch_api_get_json( $source, 'club_games_' . md5( $source ), hbch_get_setting( 'cache_club_games_minutes' ), 8 );
+	return is_array( $games ) ? $games : [];
 }
 
 /**
@@ -388,6 +523,10 @@ function hbch_club_games_url() {
 	$club_id = (int) hbch_get_setting( 'club_id' );
 	return $club_id > 0 ? 'https://clubapi.handball.ch/rest/v1/clubs/' . $club_id . '/games' : '';
 }
+
+/* ------------------------------------------------------------------------
+ * Rangliste
+ * ---------------------------------------------------------------------- */
 
 function hbch_ranking_column_order() {
 	return [ 'rank', 'team', 'games', 'wins', 'draws', 'losses', 'goals', 'diff', 'points', 'ppg' ];
@@ -443,99 +582,82 @@ function hbch_ranking_column_cell( $key, array $t, $rank_cell_html = null, $team
 }
 
 /**
- * Kurze Signatur aller Einstellungen, die das gecachte Ranglisten-HTML
- * beeinflussen (Spalten, Doppel-Logo, Such-Text, Club-ID). Sie ist Teil des
- * Cache-Schlüssels: Ändert man im Adminpanel eine dieser Einstellungen,
- * entsteht automatisch ein neuer Cache-Eintrag, statt dass alte Zeilen mit
- * neuer Kopfzeile kombiniert werden.
+ * Enthält $haystack den Text $needle (ohne Beachtung der Gross-/Kleinschreibung,
+ * UTF-8-tauglich)? Leerer $needle = nie.
  */
-function hbch_ranking_cache_signature() {
-	return substr( md5( (string) wp_json_encode( [
-		hbch_get_setting( 'ranking_columns' ),
-		hbch_get_setting( 'ranking_dual_logo_enabled' ),
-		hbch_get_setting( 'highlight_own_team_text' ),
-		hbch_get_setting( 'club_id' ),
-	] ) ), 0, 10 );
+function hbch_string_contains_ci( $haystack, $needle ) {
+	$haystack = (string) $haystack;
+	$needle   = (string) $needle;
+	if ( $needle === '' ) {
+		return false;
+	}
+	if ( function_exists( 'mb_stripos' ) ) {
+		return mb_stripos( $haystack, $needle, 0, 'UTF-8' ) !== false;
+	}
+	return stripos( $haystack, $needle ) !== false;
 }
 
 /**
- * Zeilen (<tr>) der kompakten Rangliste für [hbch_ranking].
+ * Ist das die eigene Mannschaft (Hervorhebung aktiv und Such-Text im Teamnamen)?
+ * Die Hervorhebung passiert serverseitig, ohne JavaScript.
+ */
+function hbch_is_own_team_name( $team_name ) {
+	if ( ! hbch_get_setting( 'highlight_own_team_enabled' ) ) {
+		return false;
+	}
+	return hbch_string_contains_ci( $team_name, trim( (string) hbch_get_setting( 'highlight_own_team_text' ) ) );
+}
+
+/**
+ * Zeilen (<tr>) der kompakten Rangliste für [hbch_ranking]. Die Rohdaten
+ * kommen gecacht aus hbch_fetch_group_data(), das Markup wird pro Aufruf
+ * gebaut (Änderungen an Spalten wirken sofort).
  */
 function hbch_fetch_ranking_rows( $team_id ) {
-	$colspan = count( hbch_ranking_enabled_columns( 'compact' ) );
+	$columns = array_keys( hbch_ranking_enabled_columns( 'compact' ) );
+	$colspan = count( $columns );
+
 	if ( ! $team_id ) {
 		return '<tr><td colspan="' . $colspan . '">' . esc_html( hbch_get_setting( 'text_ranking_unknown_team' ) ) . '</td></tr>';
 	}
 
-	$cache_key = 'hbch_ranking_' . $team_id . '_' . hbch_ranking_cache_signature();
-	$cached    = get_transient( $cache_key );
-	if ( $cached !== false ) {
-		return $cached;
-	}
-
 	$group = hbch_fetch_group_data( $team_id );
-
 	if ( $group === null ) {
 		return '<tr><td colspan="' . $colspan . '">' . esc_html( hbch_get_setting( 'text_ranking_unavailable' ) ) . '</td></tr>';
 	}
 
-	$data    = $group['ranking'] ?? [];
-	$columns = array_keys( hbch_ranking_enabled_columns( 'compact' ) );
-	$rows    = '';
+	$rows = '';
+	$data = $group['ranking'] ?? [];
 	if ( ! empty( $data ) && is_array( $data ) ) {
 		foreach ( $data as $t ) {
 			$cells = '';
 			foreach ( $columns as $key ) {
 				$cells .= hbch_ranking_column_cell( $key, $t );
 			}
-			$rows .= '<tr class="hbch-row-divider">' . $cells . '</tr>';
+			$class = 'hbch-row-divider' . ( hbch_is_own_team_name( $t['teamName'] ?? '' ) ? ' hbch-row-highlight-mini' : '' );
+			$rows .= '<tr class="' . $class . '">' . $cells . '</tr>';
 		}
 	}
 
-	set_transient( $cache_key, $rows, hbch_get_setting( 'cache_ranking_minutes' ) * MINUTE_IN_SECONDS );
 	return $rows;
 }
 
 /**
- * Liga-/Gruppendaten eines Teams (/teams/{id}/group), null bei Fehler.
+ * Liga-/Gruppendaten eines Teams (/teams/{id}/group), null bei Fehler (und
+ * ohne letzte gute Kopie).
  */
 function hbch_fetch_group_data( $team_id ) {
-	static $request_cache = [];
 	if ( ! $team_id ) {
 		return null;
 	}
-	if ( array_key_exists( (string) $team_id, $request_cache ) ) {
-		return $request_cache[ (string) $team_id ];
-	}
+	$team_id = (int) $team_id;
 
-	$cache_key = 'hbch_group_' . $team_id;
-	$cached    = get_transient( $cache_key );
-	if ( $cached !== false ) {
-		return $request_cache[ (string) $team_id ] = $cached;
-	}
-
-	$response = wp_remote_get( 'https://clubapi.handball.ch/rest/v1/teams/' . (int) $team_id . '/group', [
-		'timeout'     => 5,
-		'sslverify'   => hbch_ssl_verify(),
-		'redirection' => 0,
-		'headers'     => hbch_api_auth_header(),
-	] );
-
-	if ( is_wp_error( $response ) ) {
-		return $request_cache[ (string) $team_id ] = null;
-	}
-	$code = wp_remote_retrieve_response_code( $response );
-	if ( $code < 200 || $code >= 300 ) {
-		return $request_cache[ (string) $team_id ] = null;
-	}
-
-	$data = json_decode( wp_remote_retrieve_body( $response ), true );
-	if ( ! is_array( $data ) ) {
-		return $request_cache[ (string) $team_id ] = null;
-	}
-
-	set_transient( $cache_key, $data, hbch_get_setting( 'cache_ranking_minutes' ) * MINUTE_IN_SECONDS );
-	return $request_cache[ (string) $team_id ] = $data;
+	return hbch_api_get_json(
+		'https://clubapi.handball.ch/rest/v1/teams/' . $team_id . '/group',
+		'group_' . $team_id,
+		hbch_get_setting( 'cache_ranking_minutes' ),
+		5
+	);
 }
 
 /**
@@ -603,6 +725,7 @@ function hbch_validate_all_teams() {
 	}
 	return $results;
 }
+
 /**
  * Alle Teams des Vereins live von handball.ch (kein Cache — nur für die
  * einmalige "Teams laden"-Funktion im Adminpanel). Die API liefert jedes
@@ -658,6 +781,7 @@ function hbch_suggest_team_slug( array $team ) {
 	}
 	return $base !== '' ? $base : 'team';
 }
+
 /**
  * CSS-Klasse fürs Rang-Badge nach Auf-/Abstiegszone (Daten aus /teams/{id}/group).
  */
@@ -693,55 +817,48 @@ function hbch_rank_zone_class( $rank, $group ) {
  *
  * $show_zones = false: Rang-Badge bleibt immer grau, ohne Auf-/Abstiegsfarbe
  * (z. B. wenn der Block "Auf-/Abstiegszonen farbig markieren" abgewählt
- * hat). Eigener Cache-Eintrag pro Variante, damit beide unabhängig
- * zwischengespeichert werden.
+ * hat). Die Rohdaten kommen gecacht aus hbch_fetch_group_data().
  */
 function hbch_fetch_team_ranking_rows( $team_id, $show_zones = true ) {
-	$cache_key = 'hbch_team_ranking_' . $team_id . ( $show_zones ? '' : '_nozones' ) . '_' . hbch_ranking_cache_signature();
-	$rows      = get_transient( $cache_key );
+	$columns = array_keys( hbch_ranking_enabled_columns( 'detailed' ) );
 
-	if ( $rows !== false ) {
-		return $rows;
+	if ( ! $team_id ) {
+		return '<tr><td colspan="' . count( $columns ) . '">' . esc_html( hbch_get_setting( 'text_ranking_unknown_team' ) ) . '</td></tr>';
 	}
 
-	$rows      = '';
-	$api_error = false;
-	$columns   = array_keys( hbch_ranking_enabled_columns( 'detailed' ) );
-	$dual_logo = (bool) hbch_get_setting( 'ranking_dual_logo_enabled' );
-	if ( $team_id ) {
-		$group = hbch_fetch_group_data( $team_id );
-
-		if ( $group === null ) {
-			$api_error = true;
-		} else {
-			$data = $group['ranking'] ?? [];
-			if ( ! empty( $data ) && is_array( $data ) ) {
-				foreach ( $data as $t ) {
-					$zone_class = $show_zones ? hbch_rank_zone_class( $t['rank'] ?? 0, $group ) : '';
-					$rank_cell  = sprintf( '<td class="hbch-rank-cell"><span class="hbch-rank-badge %s">%s</span></td>', esc_attr( $zone_class ), esc_html( $t['rank'] ?? '' ) );
-					$team_cell  = sprintf(
-						'<td>%s %s</td>',
-						hbch_team_logo_markup( $t['teamName'] ?? '', $t['teamId'] ?? '', $t['clubId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ),
-						esc_html( $t['teamName'] ?? '' )
-					);
-
-					$cells = '';
-					foreach ( $columns as $key ) {
-						$cells .= hbch_ranking_column_cell( $key, $t, $rank_cell, $team_cell );
-					}
-					$rows .= '<tr class="hbch-row-divider">' . $cells . '</tr>';
-				}
-			}
-		}
-	}
-
-	if ( $api_error ) {
+	$group = hbch_fetch_group_data( $team_id );
+	if ( $group === null ) {
 		return '<tr><td colspan="' . count( $columns ) . '">' . esc_html( hbch_get_setting( 'text_ranking_unavailable' ) ) . '</td></tr>';
 	}
 
-	set_transient( $cache_key, $rows, hbch_get_setting( 'cache_ranking_minutes' ) * MINUTE_IN_SECONDS );
+	$dual_logo = (bool) hbch_get_setting( 'ranking_dual_logo_enabled' );
+	$rows      = '';
+	$data      = $group['ranking'] ?? [];
+	if ( ! empty( $data ) && is_array( $data ) ) {
+		foreach ( $data as $t ) {
+			$zone_class = $show_zones ? hbch_rank_zone_class( $t['rank'] ?? 0, $group ) : '';
+			$rank_cell  = sprintf( '<td class="hbch-rank-cell"><span class="hbch-rank-badge %s">%s</span></td>', esc_attr( $zone_class ), esc_html( $t['rank'] ?? '' ) );
+			$team_cell  = sprintf(
+				'<td>%s %s</td>',
+				hbch_team_logo_markup( $t['teamName'] ?? '', $t['teamId'] ?? '', $t['clubId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ),
+				esc_html( $t['teamName'] ?? '' )
+			);
+
+			$cells = '';
+			foreach ( $columns as $key ) {
+				$cells .= hbch_ranking_column_cell( $key, $t, $rank_cell, $team_cell );
+			}
+			$class = 'hbch-row-divider' . ( hbch_is_own_team_name( $t['teamName'] ?? '' ) ? ' hbch-row-highlight' : '' );
+			$rows .= '<tr class="' . $class . '">' . $cells . '</tr>';
+		}
+	}
+
 	return $rows;
 }
+
+/* ------------------------------------------------------------------------
+ * Spielpläne
+ * ---------------------------------------------------------------------- */
 
 /**
  * Team-Spielplan (kommend = 'planned' / gespielt = 'played').
@@ -750,7 +867,7 @@ function hbch_fetch_team_games( $team_id, $status ) {
 	$games = hbch_fetch_team_games_raw( $team_id );
 
 	$games = array_values( array_filter( $games, function ( $g ) use ( $status ) {
-		$played = stripos( $g['gameStatus'] ?? '', 'Gespielt' ) !== false;
+		$played = hbch_is_game_played( $g );
 		return $status === 'played' ? $played : ! $played;
 	} ) );
 
@@ -758,42 +875,23 @@ function hbch_fetch_team_games( $team_id, $status ) {
 }
 
 /**
- * Komplette, ungefilterte Spielliste eines Teams.
+ * Komplette, ungefilterte Spielliste eines Teams (gecacht, mit letzter guter
+ * Kopie bei API-Ausfall).
  */
 function hbch_fetch_team_games_raw( $team_id ) {
-	static $request_cache = [];
-	if ( array_key_exists( (string) $team_id, $request_cache ) ) {
-		return $request_cache[ (string) $team_id ];
+	if ( ! $team_id ) {
+		return [];
 	}
+	$team_id = (int) $team_id;
 
-	$cache_key = 'hbch_team_games_' . $team_id;
-	$cached    = get_transient( $cache_key );
-	if ( $cached !== false ) {
-		return $request_cache[ (string) $team_id ] = $cached;
-	}
+	$games = hbch_api_get_json(
+		'https://clubapi.handball.ch/rest/v1/teams/' . $team_id . '/games',
+		'team_games_' . $team_id,
+		hbch_get_setting( 'cache_games_minutes' ),
+		5
+	);
 
-	$response = wp_remote_get( 'https://clubapi.handball.ch/rest/v1/teams/' . (int) $team_id . '/games', [
-		'timeout'     => 5,
-		'sslverify'   => hbch_ssl_verify(),
-		'redirection' => 0,
-		'headers'     => hbch_api_auth_header(),
-	] );
-
-	if ( is_wp_error( $response ) ) {
-		return $request_cache[ (string) $team_id ] = [];
-	}
-	$code = wp_remote_retrieve_response_code( $response );
-	if ( $code < 200 || $code >= 300 ) {
-		return $request_cache[ (string) $team_id ] = [];
-	}
-
-	$games = json_decode( wp_remote_retrieve_body( $response ), true );
-	if ( ! is_array( $games ) ) {
-		return $request_cache[ (string) $team_id ] = [];
-	}
-
-	set_transient( $cache_key, $games, hbch_get_setting( 'cache_games_minutes' ) * MINUTE_IN_SECONDS );
-	return $request_cache[ (string) $team_id ] = $games;
+	return is_array( $games ) ? $games : [];
 }
 
 /**
@@ -805,18 +903,16 @@ function hbch_fetch_next_game( $team_id ) {
 	}
 	$team_id = (int) $team_id;
 
-	$cache_key = 'hbch_next_game_' . $team_id;
+	$now       = new DateTime( 'now', new DateTimeZone( 'Europe/Zurich' ) );
+	$cache_key = hbch_cache_key( 'next_game_' . $team_id );
 	$cached    = get_transient( $cache_key );
-	if ( $cached !== false ) {
-		$cache_still_valid = true;
-		if ( $cached ) {
-			$cached_kickoff = hbch_game_datetime( $cached );
-			if ( $cached_kickoff && $cached_kickoff < new DateTime( 'now', new DateTimeZone( 'Europe/Zurich' ) ) ) {
-				$cache_still_valid = false;
-			}
-		}
-		if ( $cache_still_valid ) {
-			return $cached;
+
+	if ( is_array( $cached ) && array_key_exists( 'game', $cached ) ) {
+		$cached_game = $cached['game'];
+		$kickoff     = $cached_game ? hbch_game_datetime( $cached_game ) : null;
+		// Der Eintrag gilt, solange der gemerkte Anpfiff nicht vorbei ist.
+		if ( ! $cached_game || ! $kickoff || $kickoff >= $now ) {
+			return $cached_game;
 		}
 	}
 
@@ -825,40 +921,48 @@ function hbch_fetch_next_game( $team_id ) {
 		return null;
 	}
 
-	$now = new DateTime( 'now', new DateTimeZone( 'Europe/Zurich' ) );
-
 	$games = array_filter( $games, function ( $g ) use ( $now, $team_id ) {
 		// Ungültige oder fehlende Datumswerte der API überspringen (kein Fatal Error).
 		$game_date = hbch_game_datetime( $g );
-		if ( ! $game_date ) {
+		if ( ! $game_date || $game_date < $now ) {
 			return false;
 		}
 		if ( (int) ( $g['teamAId'] ?? 0 ) !== $team_id && (int) ( $g['teamBId'] ?? 0 ) !== $team_id ) {
 			return false;
 		}
-		if ( $game_date < $now ) {
-			return false;
-		}
-		if ( stripos( $g['gameStatus'] ?? '', 'Gespielt' ) !== false || hbch_is_game_forfait( $g ) ) {
-			return false;
-		}
-		return true;
+		return ! hbch_is_game_played( $g ) && ! hbch_is_game_forfait( $g );
 	} );
 
 	$games  = hbch_sort_games_by_datetime( $games );
 	$result = $games[0] ?? null;
 
-	set_transient( $cache_key, $result, hbch_get_setting( 'cache_next_game_minutes' ) * MINUTE_IN_SECONDS );
+	set_transient( $cache_key, [ 'game' => $result ], max( 1, (int) hbch_get_setting( 'cache_next_game_minutes' ) ) * MINUTE_IN_SECONDS );
 
 	return $result;
+}
+
+/* ------------------------------------------------------------------------
+ * Logos
+ * ---------------------------------------------------------------------- */
+
+/**
+ * Transient-Schlüssel des Negativ-Markers für ein Logo, das sich nicht laden
+ * liess (verhindert, dass bei jedem Seitenaufruf erneut ein Download geplant
+ * wird).
+ */
+function hbch_logo_fail_key( $remote_url ) {
+	return hbch_cache_key( 'logo_fail_' . md5( $remote_url ) );
 }
 
 /**
  * URL eines Team-/Vereinslogos. Beim ersten Aufruf kommt sofort die
  * Original-URL, ein einmaliger WP-Cron-Job lädt die Datei nach
  * uploads/hbch-logo-cache/. Danach wird die lokale Kopie ausgeliefert.
+ * Pro Request wird jede URL nur einmal geprüft.
  */
 function hbch_logo_url( $teamId, $clubId, $width = null ) {
+	static $memo = [];
+
 	// IDs kommen aus der API: als Zahlen erzwingen, bevor sie in die URL gehen.
 	$teamId = (int) $teamId;
 	$clubId = (int) $clubId;
@@ -866,6 +970,10 @@ function hbch_logo_url( $teamId, $clubId, $width = null ) {
 	$remote_url = "https://handball.ch/images/logo/{$teamId}.png?fallbackType=club&fallbackId={$clubId}";
 	if ( $width ) {
 		$remote_url .= '&width=' . (int) $width;
+	}
+
+	if ( isset( $memo[ $remote_url ] ) ) {
+		return $memo[ $remote_url ];
 	}
 
 	static $upload_dir = null;
@@ -882,14 +990,14 @@ function hbch_logo_url( $teamId, $clubId, $width = null ) {
 	$cache_days = hbch_get_setting( 'logo_cache_days' );
 
 	if ( file_exists( $file_path ) && ( time() - filemtime( $file_path ) ) < $cache_days * DAY_IN_SECONDS ) {
-		return esc_url( $file_url );
+		return $memo[ $remote_url ] = esc_url( $file_url );
 	}
 
-	if ( ! wp_next_scheduled( 'hbch_download_logo', [ $remote_url ] ) ) {
+	if ( get_transient( hbch_logo_fail_key( $remote_url ) ) === false && ! wp_next_scheduled( 'hbch_download_logo', [ $remote_url ] ) ) {
 		wp_schedule_single_event( time(), 'hbch_download_logo', [ $remote_url ] );
 	}
 
-	return esc_url( $remote_url );
+	return $memo[ $remote_url ] = esc_url( $remote_url );
 }
 
 /**
@@ -930,7 +1038,7 @@ function hbch_team_logo_markup( $team_name, $team_id, $club_id, $css_class, $wid
 	$is_joint_team_with_us = $dual_enabled
 		&& $match_text !== ''
 		&& $own_club_id > 0
-		&& stripos( (string) $team_name, $match_text ) !== false
+		&& hbch_string_contains_ci( $team_name, $match_text )
 		&& (int) $club_id !== $own_club_id
 		&& (int) $club_id !== 0;
 
@@ -949,6 +1057,7 @@ function hbch_team_logo_markup( $team_name, $team_id, $club_id, $css_class, $wid
  *
  * Gehärtet: nur https://handball.ch/… wird geladen, und die Datei wird nur
  * gespeichert, wenn der Inhalt wirklich ein Bild ist (PNG/JPEG/GIF/WebP).
+ * Schlägt der Download fehl, verhindert ein Marker (1 Tag) neue Versuche.
  */
 function hbch_download_logo_file( $remote_url ) {
 	$parts = wp_parse_url( (string) $remote_url );
@@ -974,12 +1083,20 @@ function hbch_download_logo_file( $remote_url ) {
 		'sslverify' => hbch_ssl_verify(),
 	] );
 
+	$saved = false;
 	if ( ! is_wp_error( $response ) && wp_remote_retrieve_response_code( $response ) === 200 ) {
 		$body = wp_remote_retrieve_body( $response );
 		$info = $body !== '' ? @getimagesizefromstring( $body ) : false;
 		if ( $info && in_array( $info['mime'] ?? '', [ 'image/png', 'image/jpeg', 'image/gif', 'image/webp' ], true ) ) {
-			file_put_contents( $file_path, $body );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+			$saved = false !== file_put_contents( $file_path, $body );
 		}
+	}
+
+	if ( $saved ) {
+		delete_transient( hbch_logo_fail_key( $remote_url ) );
+	} else {
+		set_transient( hbch_logo_fail_key( $remote_url ), 1, DAY_IN_SECONDS );
 	}
 }
 add_action( 'hbch_download_logo', 'hbch_download_logo_file' );
@@ -998,7 +1115,7 @@ add_action( 'hbch_cleanup_logo_cache', function () {
 	$max_age = max( 1, (int) hbch_get_setting( 'logo_cache_days' ) ) * 2 * DAY_IN_SECONDS;
 	foreach ( glob( trailingslashit( $cache_dir ) . '*.png' ) ?: [] as $file ) {
 		if ( is_file( $file ) && ( time() - filemtime( $file ) ) > $max_age ) {
-			@unlink( $file );
+			wp_delete_file( $file );
 		}
 	}
 } );
