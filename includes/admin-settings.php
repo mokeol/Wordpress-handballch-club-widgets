@@ -277,9 +277,10 @@ function hbch_render_diagnose_tab() {
 				: "https://clubapi.handball.ch/rest/v1/teams/{$team_id}/games";
 
 			$response = wp_remote_get( $endpoint, [
-				'timeout'   => 8,
-				'sslverify' => hbch_ssl_verify(),
-				'headers'   => hbch_api_auth_header(),
+				'timeout'     => 8,
+				'sslverify'   => hbch_ssl_verify(),
+				'redirection' => 0,
+				'headers'     => hbch_api_auth_header(),
 			] );
 
 			if ( is_wp_error( $response ) ) {
@@ -720,11 +721,16 @@ add_action( 'admin_init', function () {
 		printf( '<input type="text" name="%s[club_id]" value="%s" class="regular-text">', HBCH_OPTION, esc_attr( hbch_get_setting( 'club_id' ) ?: '' ) );
 	}, 'hbch-tab-allgemein', 'hbch_section_api' );
 
+	// Das gespeicherte Passwort wird bewusst NICHT ins Formular geschrieben
+	// (sonst stünde es im Seitenquelltext). Ein leeres Feld beim Speichern
+	// behält den bisherigen Wert, siehe hbch_sanitize_settings().
 	add_settings_field( 'api_secret', 'API-Passwort', function () {
+		$has_secret = trim( (string) hbch_get_setting( 'api_secret' ) ) !== '';
 		printf(
-			'<input type="password" name="%s[api_secret]" value="%s" class="regular-text" autocomplete="off"><p class="description">Das Passwort (Secret), das der SHV zusammen mit der Club-ID ausstellt.</p>',
+			'<input type="password" name="%s[api_secret]" value="" class="regular-text" autocomplete="new-password" placeholder="%s"><p class="description">%s</p>',
 			HBCH_OPTION,
-			esc_attr( hbch_get_setting( 'api_secret' ) )
+			esc_attr( $has_secret ? '•••••••• (gespeichert)' : '' ),
+			esc_html( 'Das Passwort (Secret), das der SHV zusammen mit der Club-ID ausstellt.' . ( $has_secret ? ' Leer lassen, um das gespeicherte Passwort zu behalten.' : '' ) )
 		);
 	}, 'hbch-tab-allgemein', 'hbch_section_api' );
 
@@ -1186,7 +1192,13 @@ function hbch_sanitize_settings( $input ) {
 		$clean['club_id'] = max( 0, intval( $input['club_id'] ) );
 	}
 	if ( isset( $input['api_secret'] ) ) {
-		$clean['api_secret'] = trim( sanitize_text_field( $input['api_secret'] ) );
+		// Nur Steuerzeichen entfernen (sanitize_text_field würde z. B. "<" oder
+		// "%xx" im Passwort verändern). Leer = bisheriges Passwort behalten:
+		// das Formularfeld wird nie mit dem gespeicherten Wert vorbelegt.
+		$secret = trim( (string) preg_replace( '/[\x00-\x1F\x7F]/', '', (string) $input['api_secret'] ) );
+		if ( $secret !== '' ) {
+			$clean['api_secret'] = $secret;
+		}
 	}
 
 	if ( isset( $input['teams_raw'] ) ) {
