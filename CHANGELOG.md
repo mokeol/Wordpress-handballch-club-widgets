@@ -4,6 +4,18 @@ Die Versionshistorie steht in dieser Datei; der Reiter „Changelog“ im Adminp
 Bei jedem Release: Header-Version **und** Konstante `HBCH_VERSION` in `handballch-api.php` gemeinsam anpassen.
 Der Dateiname muss exakt `CHANGELOG.md` lauten (auf Linux-Servern case-sensitive).
 
+## 1.0.3 — Liga-Spalte im Vereins-Spielplan, Block-Umbenennung
+- `[hbch_home_next_games layout="table"]` / `[hbch_home_last_games layout="table"]` (Block
+  „Verein – Spielplan / Resultate“ mit Layout „Tabelle“): neue Liga-Spalte direkt nach
+  Datum/Zeit, da hier mehrere Ligen gemischt vorkommen. Der Team-Spielplan bleibt
+  unverändert (dort immer nur eine Liga).
+- Gutenberg-Blöcke im Block-Inserter umbenannt (nur die Anzeige, die eigentlichen
+  Blocknamen bleiben unverändert, bestehende Seiten sind nicht betroffen):
+  - „handball.ch: Rangliste“ → „Rangliste“
+  - „handball.ch: Team – Spielplan“ → „Team – Spielplan / Resultate“
+  - „handball.ch: Verein – Spielplan“ → „Verein – Spielplan / Resultate“
+  - „handball.ch: Kalender abonnieren“ → „Kalender“
+  - 
 ## 1.0.2 — Fehlerbehebungen & Aufräumen
 - Sortierung von Spiellisten (Rangliste/Spielpläne/ICS) nutzt jetzt konsequent `Europe/Zurich` statt der
   Server-Standardzeitzone (konnte rund um die Zeitumstellung zu falscher Reihenfolge führen).
@@ -13,6 +25,7 @@ Der Dateiname muss exakt `CHANGELOG.md` lauten (auf Linux-Servern case-sensitive
   Wachstum, z. B. nach Team-ID-Wechsel pro Saison).
 - Toten Code entfernt: ungenutzter `$club_id`-Parameter in `hbch_ics_fetch_games()`, ungenutzter
   `$mode`-Parameter bei den Logo-Funktionen (Überbleibsel der entfernten `loading="lazy"`-Logik).
+  
 ## 1.0.1 — Layout „Vereinsweit – letzte Resultate“
 - `[hbch_home_last_games]` / Block „Vereinsweit – letzte Resultate“: Datum und Zuschauerzahl stehen auf einer Zeile
   (auf schmalen Bildschirmen untereinander).
