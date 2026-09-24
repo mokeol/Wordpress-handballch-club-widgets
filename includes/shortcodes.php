@@ -154,7 +154,7 @@ function hbch_render_games_table_next( array $games, $table_id, $show_league = f
 
 	$venue_th  = $show_venue_col ? '<th class="hbch-game-row hbch-priority-2">' . esc_html( $f['venue']['label'] ) . '</th>' : '';
 	$link_th   = $show_link      ? '<th class="hbch-game-row hbch-priority-2"></th>' : '';
-	$league_th = $show_league    ? '<th class="hbch-game-row">Liga</th>' : '';
+	$league_th = $show_league    ? '<th class="hbch-game-row hbch-priority-2"">Liga</th>' : '';
 
 	return '<table id="' . esc_attr( $table_id ) . '" class="hbch-table-responsive"><tbody>
 		<tr><th class="hbch-game-row hbch-priority-2">' . esc_html( $f['date']['label'] ) . '</th><th class="hbch-game-row hbch-priority-2">' . esc_html( $f['time']['label'] ) . '</th>' . $league_th . '
