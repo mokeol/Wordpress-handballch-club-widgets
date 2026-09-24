@@ -20,7 +20,7 @@ Club Widgets for handball.ch shows the data of your handball club on your WordPr
 
 * Compact and detailed standings, with promotion and relegation zones
 * Fixtures and results per team
-* Club-wide "next games" and "latest results" widgets, for example for a home page
+* Club-wide "next games" and "latest results" widgets, for example for a home page (table layout includes a league column)
 * Countdown to the next game
 * "Subscribe to calendar" button and an ICS feed at `/spielplan.ics` (whole club or a single team)
 * LIVE badge while a game is running, marking of forfeited games
