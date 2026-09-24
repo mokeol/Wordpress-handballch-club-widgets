@@ -74,9 +74,11 @@ add_shortcode( 'hbch_team_ranking', function ( $atts ) {
  * Team-Ebene ([hbch_team_next_games] bzw. Block "Team – Spielplan") und die
  * Vereins-Ebene mit layout="table" verwendet (dann mit den Spielen des ganzen
  * Vereins). Die Felder kommen immer aus den Einstellungen "Team-Spielplan"
- * (games_fields). $table_id muss pro Seite eindeutig sein.
+ * (games_fields). $table_id muss pro Seite eindeutig sein. $show_league
+ * blendet eine zusätzliche Liga-Spalte nach Datum/Zeit ein (nur für die
+ * Vereins-Ebene relevant, da dort mehrere Ligen gemischt vorkommen).
  */
-function hbch_render_games_table_next( array $games, $table_id ) {
+function hbch_render_games_table_next( array $games, $table_id, $show_league = false ) {
 	$f = hbch_get_setting( 'games_fields' );
 
 	$show_round   = ! empty( $f['round']['enabled_next'] );
@@ -103,7 +105,8 @@ function hbch_render_games_table_next( array $games, $table_id ) {
 		if ( $show_spect && isset( $g['spectators'] ) && $g['spectators'] > 0 ) {
 			$venue_html .= ' <span class="hbch-extra-info">· ' . esc_html( $g['spectators'] ) . ' ' . esc_html( $spect_label ) . ' (erwartet)</span>';
 		}
-		$link_html = $show_link ? ' ' . hbch_matchcenter_link_markup( $g['gameId'] ?? '' ) : '';
+		$link_html   = $show_link ? ' ' . hbch_matchcenter_link_markup( $g['gameId'] ?? '' ) : '';
+		$league_cell = $show_league ? '<td class="hbch-text-small hbch-league-cell">%9$s</td>' : '';
 
 		// LIVE-Badge und Forfait ersetzen Datum+Zeit durch EINE Zelle (colspan=2).
 		// Diese Zellen tragen absichtlich nicht die Klassen hbch-date-raw/-time-raw,
@@ -130,7 +133,8 @@ function hbch_render_games_table_next( array $games, $table_id ) {
 
 		$rows .= sprintf(
 			'<tr class="' . $row_class . '">'
-				. $datetime_cells . '
+				. $datetime_cells
+				. $league_cell . '
 				<td class="hbch-hidden-source">%2$s</td>
 				<td class="hbch-team-cell hbch-align-right">%3$s %4$s</td>
 				<td class="hbch-vs-cell hbch-priority-2"> : </td>
@@ -145,24 +149,26 @@ function hbch_render_games_table_next( array $games, $table_id ) {
 			hbch_team_logo_markup( $g['teamBName'] ?? '', $g['teamBId'] ?? '', $g['clubTeamBId'] ?? '', 'hbch-team-logo-sm', 60, $dual_logo, 50 ),
 			hbch_team_name_markup( $g['teamBName'] ?? '', $g['teamBNameShort'] ?? '', $short_names ),
 			$venue_html,
-			$link_html
+			$link_html,
+			esc_html( $g['leagueShort'] ?? '' )
 		);
 	}
 
-	$venue_th = $show_venue_col ? '<th class="hbch-game-row hbch-priority-2">' . esc_html( $f['venue']['label'] ) . '</th>' : '';
-	$link_th  = $show_link      ? '<th class="hbch-game-row hbch-priority-2"></th>' : '';
+	$venue_th  = $show_venue_col ? '<th class="hbch-game-row hbch-priority-2">' . esc_html( $f['venue']['label'] ) . '</th>' : '';
+	$link_th   = $show_link      ? '<th class="hbch-game-row hbch-priority-2"></th>' : '';
+	$league_th = $show_league    ? '<th class="hbch-game-row">Liga</th>' : '';
 
 	return '<table id="' . esc_attr( $table_id ) . '" class="hbch-table-responsive"><tbody>
-		<tr><th class="hbch-game-row hbch-priority-2">' . esc_html( $f['date']['label'] ) . '</th><th class="hbch-game-row hbch-priority-2">' . esc_html( $f['time']['label'] ) . '</th>
+		<tr><th class="hbch-game-row hbch-priority-2">' . esc_html( $f['date']['label'] ) . '</th><th class="hbch-game-row hbch-priority-2">' . esc_html( $f['time']['label'] ) . '</th>' . $league_th . '
 		<th colspan="3" class="hbch-game-row hbch-priority-2">' . esc_html( $f['matchup']['label'] ) . '</th>' . $venue_th . $link_th . '</tr>'
 		. $rows . '</tbody></table>';
 }
 
 /**
  * Tabelle "gespielte Spiele" im Team-Spielplan-Format, siehe
- * hbch_render_games_table_next().
+ * hbch_render_games_table_next(). $show_league siehe dort.
  */
-function hbch_render_games_table_last( array $games, $table_id ) {
+function hbch_render_games_table_last( array $games, $table_id, $show_league = false ) {
 	$f = hbch_get_setting( 'games_fields' );
 
 	$show_round   = ! empty( $f['round']['enabled_last'] );
@@ -187,10 +193,12 @@ function hbch_render_games_table_last( array $games, $table_id ) {
 		$venue_html     = ( $show_venue ? hbch_venue_display( $g, $show_addr ) : '' ) . hbch_extra_line( $g, $show_round, $show_type, $round_prefix );
 		$spectators_txt = $show_spect ? esc_html( $g['spectators'] ?? '' ) . ' ' . esc_html( $spect_label ) : '';
 		$link_html      = $show_link ? ' ' . hbch_matchcenter_link_markup( $g['gameId'] ?? '' ) : '';
+		$league_html    = $show_league ? '<td class="hbch-text-small hbch-league-cell">%14$s</td>' : '';
 		$rows .= sprintf(
 			'<tr class="hbch-game-row">
 				<td class="hbch-text-small hbch-date-raw">%1$s</td>
-				<td class="hbch-hidden-source hbch-time-raw"></td>
+				<td class="hbch-hidden-source hbch-time-raw"></td>'
+				. $league_html . '
 				<td class="hbch-hidden-source">%2$s</td>
 				<td class="hbch-team-cell hbch-align-right">%3$s %4$s</td>
 				<td class="hbch-result-cell hbch-priority-2"><span class="hbch-score-badge">%5$s : %6$s </span>(%7$s:%8$s)</td>
@@ -212,16 +220,18 @@ function hbch_render_games_table_last( array $games, $table_id ) {
 			hbch_team_name_markup( $g['teamBName'] ?? '', $g['teamBNameShort'] ?? '', $short_names ),
 			$venue_html,
 			$spectators_txt,
-			$link_html
+			$link_html,
+			esc_html( $g['leagueShort'] ?? '' )
 		);
 	}
 
-	$venue_th = $show_venue_col ? '<th class="hbch-game-row hbch-priority-2">' . esc_html( $f['venue']['label'] ) . '</th>' : '';
-	$spect_th = $show_spect     ? '<th class="hbch-game-row hbch-priority-2">' . esc_html( $f['spectators']['label'] ) . '</th>' : '';
-	$link_th  = $show_link      ? '<th class="hbch-game-row hbch-priority-2">' . esc_html( $f['details']['label'] ) . '</th>' : '';
+	$venue_th  = $show_venue_col ? '<th class="hbch-game-row hbch-priority-2">' . esc_html( $f['venue']['label'] ) . '</th>' : '';
+	$spect_th  = $show_spect     ? '<th class="hbch-game-row hbch-priority-2">' . esc_html( $f['spectators']['label'] ) . '</th>' : '';
+	$link_th   = $show_link      ? '<th class="hbch-game-row hbch-priority-2">' . esc_html( $f['details']['label'] ) . '</th>' : '';
+	$league_th = $show_league    ? '<th class="hbch-game-row">Liga</th>' : '';
 
 	return '<table id="' . esc_attr( $table_id ) . '" class="hbch-table-responsive"><tbody>
-		<tr><th class="hbch-game-row hbch-priority-2">' . esc_html( $f['date']['label'] ) . '</th><th colspan="3" class="hbch-game-row hbch-priority-2">' . esc_html( $f['matchup']['label'] ) . '</th>'
+		<tr><th class="hbch-game-row hbch-priority-2">' . esc_html( $f['date']['label'] ) . '</th>' . $league_th . '<th colspan="3" class="hbch-game-row hbch-priority-2">' . esc_html( $f['matchup']['label'] ) . '</th>'
 		. $venue_th . $spect_th . $link_th . '</tr>'
 		. $rows . '</tbody></table>';
 }
@@ -265,7 +275,8 @@ add_shortcode( 'hbch_team_last_games', function ( $atts ) {
  * $layout: "cards" (Default) = Kartenlook für die Startseite, gleiches Grid
  *   wie hbch_render_home_last_games() (Felder aus "Vereins-Spielplan").
  *   "table" = Tabellenlook wie beim Team-Spielplan inkl. Mobile-Ansicht,
- *   z. B. für die Gesamtspielplan-Seite (Felder aus "Team-Spielplan").
+ *   z. B. für die Gesamtspielplan-Seite (Felder aus "Team-Spielplan"), inkl.
+ *   Liga-Spalte, da hier mehrere Ligen gemischt vorkommen.
  * $limit: leer = Standard-Anzahl aus den Einstellungen.
  */
 function hbch_render_home_next_games( $limit = '', $exclude = '', $layout = 'cards' ) {
@@ -293,7 +304,7 @@ function hbch_render_home_next_games( $limit = '', $exclude = '', $layout = 'car
 	$games = hbch_next_games( $req )->get_data();
 
 	if ( $table ) {
-		return hbch_render_games_table_next( $games, 'hbch-club-games-next' ) . hbch_render_games_jsonld( $games );
+		return hbch_render_games_table_next( $games, 'hbch-club-games-next', true ) . hbch_render_games_jsonld( $games );
 	}
 
 	// "Auf Mobile anzeigen" bei Halle steuert den Meta-Block (Halle/Zuschauer/Runde/Spielart).
@@ -371,7 +382,7 @@ add_shortcode( 'hbch_home_next_games', function ( $atts ) {
  *   B). Die Mitte ist so breit wie ihr Inhalt, die beiden Team-Spalten
  *   teilen sich den Rest gleichmässig (siehe .hbch-home-result-grid in
  *   public.css). "table" = Tabellenlook wie beim Team-Spielplan (siehe
- *   hbch_render_home_next_games()).
+ *   hbch_render_home_next_games()), inkl. Liga-Spalte.
  * $limit: leer = Standard-Anzahl aus den Einstellungen.
  */
 function hbch_render_home_last_games( $limit = '', $exclude = '', $layout = 'cards' ) {
@@ -383,7 +394,7 @@ function hbch_render_home_last_games( $limit = '', $exclude = '', $layout = 'car
 	$games = hbch_last_games( $req )->get_data();
 
 	if ( $layout === 'table' ) {
-		return hbch_render_games_table_last( $games, 'hbch-club-games-last' );
+		return hbch_render_games_table_last( $games, 'hbch-club-games-last', true );
 	}
 
 	$f = hbch_get_setting( 'home_fields' );
