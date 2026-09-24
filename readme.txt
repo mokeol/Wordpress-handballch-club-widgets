@@ -4,7 +4,7 @@ Tags: handball, sports, standings, fixtures, calendar
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.2
+Stable tag: 1.0.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -115,7 +115,9 @@ The API has no "running" status, so a game counts as live for 90 minutes after k
 No, it is built for the API of the Swiss Handball Federation.
 
 == Changelog ==
-
+= 1.0.3 =
+* Club-wide fixtures/results table layout now shows the league per game (a new column right after date/time), since this view mixes several leagues. The per-team schedule is unaffected (always a single league there).
+* Renamed the Gutenberg blocks as they appear in the block inserter (display names only, the underlying block names and existing pages are unaffected).
 = 1.0.2 =
 * Fixed timezone-inconsistent sorting of game lists (standings, fixtures, ICS export).
 * Added nonce protection to the "load teams"/"check team IDs" admin actions.
