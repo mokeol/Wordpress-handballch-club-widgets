@@ -219,7 +219,7 @@ function hbch_render_games_table_last( array $games, $table_id, $show_league = f
 	$venue_th  = $show_venue_col ? '<th class="hbch-game-row hbch-priority-2">' . esc_html( $f['venue']['label'] ) . '</th>' : '';
 	$spect_th  = $show_spect     ? '<th class="hbch-game-row hbch-priority-2">' . esc_html( $f['spectators']['label'] ) . '</th>' : '';
 	$link_th   = $show_link      ? '<th class="hbch-game-row hbch-priority-2">' . esc_html( $f['details']['label'] ) . '</th>' : '';
-	$league_th = $show_league    ? '<th class="hbch-game-row">Liga</th>' : '';
+	$league_th = $show_league    ? '<th class="hbch-game-row hbch-priority-2"">Liga</th>' : '';
 
 	return '<table id="' . esc_attr( $table_id ) . '" class="hbch-table-responsive"><tbody>
 		<tr><th class="hbch-game-row hbch-priority-2">' . esc_html( $f['date']['label'] ) . '</th>' . $league_th . '<th colspan="3" class="hbch-game-row hbch-priority-2">' . esc_html( $f['matchup']['label'] ) . '</th>'
