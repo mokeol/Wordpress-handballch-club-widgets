@@ -91,10 +91,10 @@ add_action( 'init', function () {
 		}
 	);
 
-	// "Team – Spielplan": Nächste Spiele und/oder Resultate eines Teams.
+	// "Team – Spielplan / Resultate": Nächste Spiele und/oder Resultate eines Teams.
 	hbch_register_block(
 		'handballch/team-games',
-		'Team – Spielplan',
+		'Team – Spielplan / Resultate',
 		'Nächste Spiele und/oder Resultate eines Teams. Auswahl per Checkbox.',
 		'calendar-alt',
 		[
@@ -126,12 +126,12 @@ add_action( 'init', function () {
 		}
 	);
 
-	// "Verein – Spielplan": Nächste Spiele und/oder Resultate über alle
+	// "Verein – Spielplan / Resultate": Nächste Spiele und/oder Resultate über alle
 	// Teams. "layout": "cards" (Startseiten-Kartenlook, Default) oder
 	// "table" (Team-Spielplan-Tabellenlook, z. B. für die Gesamtspielplan-Seite).
 	hbch_register_block(
 		'handballch/home-games',
-		'Verein – Spielplan',
+		'Verein – Spielplan / Resultate',
 		'Nächste Spiele und/oder Resultate über alle Teams. Auswahl per Checkbox, Layout wählbar: Karten (Startseite) oder Tabelle (wie Team-Spielplan).',
 		'calendar',
 		[
@@ -158,7 +158,7 @@ add_action( 'init', function () {
 
 	hbch_register_block(
 		'handballch/ics-subscribe',
-		'Kalender abonnieren',
+		'Kalender',
 		'"Kalender abonnieren"-Button mit Dropdown (ICS/webcal, Google Kalender, Link) — entspricht [hbch_ics].',
 		'download',
 		[
