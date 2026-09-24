@@ -7,30 +7,23 @@
  * für diesen Block überschreiben (Rollen pro Block: hbch_block_color_roles()
  * in colors.php). Die Shortcodes nutzen nur die globalen Farben.
  *
- * "Rangliste", "Team – Spielplan" und "Verein – Spielplan" rufen die
- * Render-Funktionen aus shortcodes.php direkt auf (kein do_shortcode()/
- * Shortcode-Tag-Umweg) und bündeln mit Checkboxen, was frühere Einzelblöcke
- * getrennt abdeckten:
+ * Alle Blöcke rufen die Render-Funktionen aus shortcodes.php bzw. ics.php
+ * direkt auf (kein do_shortcode()/Shortcode-Tag-Umweg). "Rangliste", "Team –
+ * Spielplan" und "Verein – Spielplan" bündeln mit Checkboxen, was frühere
+ * Einzelblöcke getrennt abdeckten:
  *   - "Rangliste": kompakt ODER detailliert (eine Checkbox), bei detailliert
  *     zusätzlich optional Auf-/Abstiegszonen farbig markieren.
  *   - "Team – Spielplan" / "Verein – Spielplan": Nächste Spiele und/oder
  *     Resultate (zwei unabhängige Checkboxen).
+ *
+ * Die alten Einzelblöcke sind nicht mehr registriert. Bestehende Seiten mit
+ * den alten Blocknamen werden über hbch_legacy_block_map() beim Rendern auf
+ * die neuen Blöcke umgeleitet (Frontend) bzw. im Editor zur Umwandlung
+ * angeboten (assets/js/blocks-legacy.js).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
-}
-
-function hbch_block_render_shortcode( $tag, array $atts ) {
-	$parts = [ $tag ];
-	foreach ( $atts as $key => $value ) {
-		$value = is_string( $value ) ? trim( $value ) : $value;
-		if ( $value === '' || $value === null ) {
-			continue;
-		}
-		$parts[] = sprintf( '%s="%s"', $key, esc_attr( $value ) );
-	}
-	return do_shortcode( '[' . implode( ' ', $parts ) . ']' );
 }
 
 /**
@@ -42,15 +35,38 @@ function hbch_block_wrap( $inner_html, $style = '' ) {
 }
 
 /**
- * Für "Countdown" und "Kalender abonnieren": einfache 1:1-Blöcke, die
- * weiterhin ihren jeweils einen Shortcode aufrufen.
+ * Alte Blocknamen (vor der Zusammenlegung) => neuer Block plus Attribute, die
+ * der neue Block dafür braucht. Ist ein Name hier falsch oder fehlt einer,
+ * genügt eine Zeile; die Liste dient Frontend, Asset-Erkennung und Editor.
  */
-function hbch_block_render( $block_name, $shortcode, array $attributes, array $shortcode_atts ) {
-	return hbch_block_wrap(
-		hbch_block_render_shortcode( $shortcode, $shortcode_atts ),
-		hbch_block_color_style( $attributes, $block_name )
-	);
+function hbch_legacy_block_map() {
+	return [
+		'handballch/team-ranking'    => [ 'block' => 'handballch/ranking',    'attrs' => [ 'detailed' => true, 'show_zones' => true ] ],
+		'handballch/team-next-games' => [ 'block' => 'handballch/team-games', 'attrs' => [ 'show_next' => true,  'show_last' => false ] ],
+		'handballch/team-last-games' => [ 'block' => 'handballch/team-games', 'attrs' => [ 'show_next' => false, 'show_last' => true ] ],
+		'handballch/home-next-games' => [ 'block' => 'handballch/home-games', 'attrs' => [ 'show_next' => true,  'show_last' => false ] ],
+		'handballch/home-last-games' => [ 'block' => 'handballch/home-games', 'attrs' => [ 'show_next' => false, 'show_last' => true ] ],
+	];
 }
+
+/**
+ * Frontend: alte Blocknamen vor dem Rendern auf die neuen Blöcke umleiten.
+ * Die Seiteninhalte in der Datenbank bleiben unverändert.
+ */
+add_filter( 'render_block_data', function ( $parsed_block ) {
+	$name = $parsed_block['blockName'] ?? '';
+	$map  = hbch_legacy_block_map();
+	if ( ! $name || ! isset( $map[ $name ] ) ) {
+		return $parsed_block;
+	}
+
+	$attrs = ( isset( $parsed_block['attrs'] ) && is_array( $parsed_block['attrs'] ) ) ? $parsed_block['attrs'] : [];
+
+	$parsed_block['blockName'] = $map[ $name ]['block'];
+	$parsed_block['attrs']     = array_merge( $attrs, $map[ $name ]['attrs'] );
+
+	return $parsed_block;
+} );
 
 /**
  * Registriert einen Block samt Farb-Attributen. Die Farb-Attribute werden in
@@ -122,7 +138,8 @@ add_action( 'init', function () {
 		'clock',
 		[ 'team' => [ 'type' => 'string', 'default' => '' ] ],
 		function ( $attributes ) {
-			return hbch_block_render( 'handballch/next-game', 'hbch_next_game', $attributes, [ 'team' => $attributes['team'] ?? '' ] );
+			$team_id = hbch_get_team_id( $attributes['team'] ?? '' );
+			return hbch_block_wrap( hbch_render_next_game( $team_id ), hbch_block_color_style( $attributes, 'handballch/next-game' ) );
 		}
 	);
 
@@ -166,10 +183,10 @@ add_action( 'init', function () {
 			'label' => [ 'type' => 'string', 'default' => '' ],
 		],
 		function ( $attributes ) {
-			return hbch_block_render( 'handballch/ics-subscribe', 'hbch_ics', $attributes, [
-				'team'  => $attributes['team'] ?? '',
-				'label' => $attributes['label'] ?? '',
-			] );
+			return hbch_block_wrap(
+				hbch_render_ics_button( $attributes['team'] ?? '', $attributes['label'] ?? '' ),
+				hbch_block_color_style( $attributes, 'handballch/ics-subscribe' )
+			);
 		}
 	);
 } );
@@ -201,6 +218,16 @@ add_action( 'enqueue_block_editor_assets', function () {
 		'colorsUrl'         => admin_url( 'options-general.php?page=hbch-settings&tab=farben' ),
 		'blockColors'       => hbch_block_colors_for_js(),
 	] );
+
+	// Alte Blocknamen: nur zum Umwandeln im Editor (nicht im Inserter).
+	wp_enqueue_script(
+		'handballch-api-blocks-legacy',
+		HBCH_URL . 'assets/js/blocks-legacy.js',
+		[ 'wp-blocks', 'wp-element', 'wp-block-editor', 'wp-components', 'wp-data', 'wp-i18n' ],
+		HBCH_VERSION,
+		true
+	);
+	wp_localize_script( 'handballch-api-blocks-legacy', 'handballchApiLegacyBlocks', hbch_legacy_block_map() );
 
 	wp_enqueue_style( 'handballch-api-blocks-editor', HBCH_URL . 'assets/css/admin.css', [], HBCH_VERSION );
 } );
