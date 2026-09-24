@@ -248,17 +248,10 @@ function hbch_render_diagnose_tab() {
 	}
 
 	if ( isset( $_POST['hbch_diagnose_clear_cache'] ) && check_admin_referer( 'hbch_diagnose_clear_cache_action', 'hbch_diagnose_nonce' ) ) {
-		global $wpdb;
-		$deleted = $wpdb->query(
-			$wpdb->prepare(
-				"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
-				$wpdb->esc_like( '_transient_hbch_' ) . '%',
-				$wpdb->esc_like( '_transient_timeout_hbch_' ) . '%'
-			)
-		);
-		printf( '<div class="notice notice-success"><p>Cache geleert (%d Einträge entfernt, inkl. Zeitstempel-Zeilen).</p></div>', (int) ( $deleted / 2 ) );
+		$deleted = hbch_flush_cache();
+		printf( '<div class="notice notice-success"><p>Cache geleert (%d Einträge aus der Datenbank entfernt, Cache-Version erhöht).</p></div>', (int) $deleted );
 	}
-
+	
 	$raw_json      = null;
 	$raw_error     = null;
 	$selected_team = '';
@@ -986,7 +979,7 @@ add_action( 'admin_init', function () {
 	}, 'hbch-tab-startseite', 'hbch_home_limit' );
 
 	add_settings_section( 'hbch_home_css', 'Standard- & eigenes CSS', function () {
-		echo '<p>Oben das mitgelieferte Standard-CSS (nur Referenz), darunter das freie Feld, das NACH dem Standard-CSS geladen wird. Farben besser im Reiter "Farben" einstellen. Betrifft die Klassen <code>.hbch-home-game-grid</code>, <code>.hbch-home-result-grid</code>, <code>.hbch-league*</code>, <code>.hbch-venue*</code>, <code>.hbch-team-logo-preview</code>, <code>.hbch-score-result</code> in <code>[hbch_home_next_games]</code>/<code>[hbch_home_last_games]</code>.</p>';
+		echo '<p>Oben das mitgelieferte Standard-CSS (nur Referenz), darunter das freie Feld, das NACH dem Standard-CSS geladen wird. Farben besser im Reiter "Farben" einstellen. Betrifft die Klassen <code>.hbch-home-result-grid</code>, <code>.hbch-result-*</code>, <code>.hbch-league</code>, <code>.hbch-venue</code>, <code>.hbch-team-logo-score</code>, <code>.hbch-score-result</code>, <code>.hbch-game-datetime</code> in <code>[hbch_home_next_games]</code>/<code>[hbch_home_last_games]</code>.</p>';
 	}, 'hbch-tab-startseite' );
 	add_settings_field( 'css_home_default', 'Standard-CSS (Referenz)', function () {
 		hbch_field_default_css_display( [ 'startseite', 'shared' ] );
