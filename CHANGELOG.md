@@ -4,6 +4,32 @@ Die Versionshistorie steht in dieser Datei; der Reiter „Changelog“ im Adminp
 Bei jedem Release: Header-Version **und** Konstante `HBCH_VERSION` in `handballch-api.php` gemeinsam anpassen.
 Der Dateiname muss exakt `CHANGELOG.md` lauten (auf Linux-Servern case-sensitive).
 
+## 1.0.4 — Fehlerbehebungen & Sicherheit
+- Behoben: `HBCH_VERSION` stand noch auf `1.0.2` (Header: `1.0.3`); Browser konnten dadurch veraltetes CSS/JS behalten.
+- Behoben: Auf Seiten, die nur die Blöcke „Team – Spielplan / Resultate“ oder „Verein – Spielplan / Resultate“
+  enthielten, wurden CSS und JS nicht geladen (die Block-Erkennung kannte nur die alten Blocknamen).
+- Behoben: Nach einer Änderung der Ranglisten-Spalten oder des Doppel-Logo-/Such-Text-Felds passten Kopfzeile und
+  gecachte Zeilen bis zu 20 Minuten nicht zusammen. Der Cache-Schlüssel enthält jetzt eine Signatur dieser Einstellungen.
+- Behoben (Kalender-Dropdown): „Kalenderlink kopieren“ und „Teilen“ reagierten nicht, wenn man auf das Icon klickte;
+  nach dem Kopieren fehlte das Icon; „Teilen“ war auch ohne Browser-Unterstützung sichtbar; Fallback fürs Kopieren
+  auf Seiten ohne https.
+- ICS-Export: Forfait-Spiele werden nicht mehr exportiert; Zeiten werden in UTC ausgegeben (kein VTIMEZONE-Block
+  nötig, zuverlässig in Outlook); unbekannter `?team=`-Slug liefert eine 404-Seite statt eines leeren Kalenders.
+- Behoben: Countdown zeigte ein „&“ im Hallennamen als „&amp;“.
+- Behoben: „Eigene Mannschaft hervorheben“ vergleicht jetzt ohne Beachtung der Gross-/Kleinschreibung (wie die
+  Erkennung von Spielgemeinschaften) und kommt mit Sonderzeichen wie „&“ im Such-Text zurecht.
+- Behoben: Ein einzelner ungültiger Datumswert der API konnte die ganze Seite lahmlegen (Fatal Error in
+  `/next-games` und beim Countdown). Solche Spiele werden jetzt übersprungen.
+- Sicherheit: Der REST-Parameter `source` wurde entfernt. Er erlaubte beliebig viele authentifizierte Anfragen und
+  Cache-Einträge. Die Endpunkte lesen immer die Spielliste des eigenen Vereins.
+- Sicherheit: REST-Parameter (`limit`, `exclude`, `include_live`) werden bereinigt/validiert; `include_live=false`
+  wird jetzt auch als „aus“ erkannt.
+- Sicherheit: Das API-Passwort wird nicht mehr im Formular ausgegeben (kein Wert im Seitenquelltext). Leer lassen
+  beim Speichern behält das gespeicherte Passwort. Sonderzeichen im Passwort werden nicht mehr verändert.
+- Sicherheit: Anfragen mit Zugangsdaten folgen keinen Weiterleitungen mehr.
+- Sicherheit: Der Logo-Download lädt nur von `https://handball.ch/…` und speichert nur echte Bilddateien; IDs in
+  Logo-URLs werden als Zahlen erzwungen.
+
 ## 1.0.3 — Liga-Spalte im Vereins-Spielplan, Block-Umbenennung
 - `[hbch_home_next_games layout="table"]` / `[hbch_home_last_games layout="table"]` (Block
   „Verein – Spielplan / Resultate“ mit Layout „Tabelle“): neue Liga-Spalte direkt nach
@@ -15,7 +41,7 @@ Der Dateiname muss exakt `CHANGELOG.md` lauten (auf Linux-Servern case-sensitive
   - „handball.ch: Team – Spielplan“ → „Team – Spielplan / Resultate“
   - „handball.ch: Verein – Spielplan“ → „Verein – Spielplan / Resultate“
   - „handball.ch: Kalender abonnieren“ → „Kalender“
-  - 
+
 ## 1.0.2 — Fehlerbehebungen & Aufräumen
 - Sortierung von Spiellisten (Rangliste/Spielpläne/ICS) nutzt jetzt konsequent `Europe/Zurich` statt der
   Server-Standardzeitzone (konnte rund um die Zeitumstellung zu falscher Reihenfolge führen).
@@ -25,7 +51,7 @@ Der Dateiname muss exakt `CHANGELOG.md` lauten (auf Linux-Servern case-sensitive
   Wachstum, z. B. nach Team-ID-Wechsel pro Saison).
 - Toten Code entfernt: ungenutzter `$club_id`-Parameter in `hbch_ics_fetch_games()`, ungenutzter
   `$mode`-Parameter bei den Logo-Funktionen (Überbleibsel der entfernten `loading="lazy"`-Logik).
-  
+
 ## 1.0.1 — Layout „Vereinsweit – letzte Resultate“
 - `[hbch_home_last_games]` / Block „Vereinsweit – letzte Resultate“: Datum und Zuschauerzahl stehen auf einer Zeile
   (auf schmalen Bildschirmen untereinander).
