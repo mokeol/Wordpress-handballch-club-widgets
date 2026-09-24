@@ -2,7 +2,9 @@
 /**
  * includes/rest.php
  *
- * Öffentliche, nur lesende REST-Endpunkte für Vereins-Spiele
+ * Abfragen der Vereins-Spiele (hbch_get_next_games() / hbch_get_last_games(),
+ * reine Funktionen, von den Shortcodes und Blöcken direkt genutzt) und die
+ * öffentlichen, nur lesenden REST-Endpunkte darauf
  * (/wp-json/handballch/v1/next-games und /last-games).
  *
  * Die Quelle ist immer die Spielliste des eigenen Vereins. Einen frei
@@ -29,7 +31,7 @@ add_action( 'rest_api_init', function () {
 
 	register_rest_route( 'handballch/v1', '/next-games', [
 		'methods'             => 'GET',
-		'callback'            => 'hbch_next_games',
+		'callback'            => 'hbch_rest_next_games',
 		'permission_callback' => '__return_true',
 		'args'                => array_merge( $common_args, [
 			'include_live' => [
@@ -42,7 +44,7 @@ add_action( 'rest_api_init', function () {
 	] );
 	register_rest_route( 'handballch/v1', '/last-games', [
 		'methods'             => 'GET',
-		'callback'            => 'hbch_last_games',
+		'callback'            => 'hbch_rest_last_games',
 		'permission_callback' => '__return_true',
 		'args'                => $common_args,
 	] );
@@ -74,15 +76,15 @@ function hbch_game_matches_exclude( $game, $exclude ) {
 }
 
 /**
- * GET /next-games: künftige Spiele, aufsteigend sortiert. Forfait-Spiele
- * werden nicht ausgeliefert. "include_live" behält ein laufendes Spiel.
- * Die Funktion wird auch direkt von den Shortcodes aufgerufen (dann ohne
- * Args-Verarbeitung), deshalb werden die Werte hier nochmals bereinigt.
+ * Künftige Spiele des Vereins, aufsteigend sortiert. Forfait-Spiele werden
+ * nicht geliefert. $include_live behält ein gerade laufendes Spiel.
+ * $limit: leer/ungültig = Standard-Anzahl aus den Einstellungen (1–50).
+ * Die Werte werden hier bereinigt, die Funktion ist also direkt aufrufbar.
  */
-function hbch_next_games( WP_REST_Request $request ) {
-	$limit        = hbch_normalize_games_limit( $request->get_param( 'limit' ) );
-	$exclude      = sanitize_text_field( (string) $request->get_param( 'exclude' ) );
-	$include_live = rest_sanitize_boolean( $request->get_param( 'include_live' ) );
+function hbch_get_next_games( $limit = '', $exclude = '', $include_live = false ) {
+	$limit        = hbch_normalize_games_limit( $limit );
+	$exclude      = sanitize_text_field( (string) $exclude );
+	$include_live = rest_sanitize_boolean( $include_live );
 
 	$games = hbch_fetch_club_games( hbch_club_games_url() );
 
@@ -94,7 +96,7 @@ function hbch_next_games( WP_REST_Request $request ) {
 		if ( ! $game_date ) {
 			return false;
 		}
-		if ( stripos( $g['gameStatus'] ?? '', 'Gespielt' ) !== false || hbch_is_game_forfait( $g ) ) {
+		if ( hbch_is_game_played( $g ) || hbch_is_game_forfait( $g ) ) {
 			return false;
 		}
 		if ( $game_date < $now && ! ( $include_live && hbch_is_game_live( $g ) ) ) {
@@ -105,17 +107,15 @@ function hbch_next_games( WP_REST_Request $request ) {
 
 	$games = hbch_sort_games_by_datetime( $games );
 
-	$response = new WP_REST_Response( array_slice( $games, 0, $limit ), 200 );
-	$response->header( 'Cache-Control', 'public, max-age=' . hbch_rest_cache_seconds() );
-	return $response;
+	return array_slice( $games, 0, $limit );
 }
 
 /**
- * GET /last-games: gespielte Spiele, neueste zuerst (ohne Forfait).
+ * Gespielte Spiele des Vereins, neueste zuerst (ohne Forfait).
  */
-function hbch_last_games( WP_REST_Request $request ) {
-	$limit   = hbch_normalize_games_limit( $request->get_param( 'limit' ) );
-	$exclude = sanitize_text_field( (string) $request->get_param( 'exclude' ) );
+function hbch_get_last_games( $limit = '', $exclude = '' ) {
+	$limit   = hbch_normalize_games_limit( $limit );
+	$exclude = sanitize_text_field( (string) $exclude );
 
 	$games = hbch_fetch_club_games( hbch_club_games_url() );
 
@@ -123,7 +123,7 @@ function hbch_last_games( WP_REST_Request $request ) {
 		if ( empty( $g['gameDateTime'] ) ) {
 			return false;
 		}
-		if ( stripos( $g['gameStatus'] ?? '', 'Gespielt' ) === false || hbch_is_game_forfait( $g ) ) {
+		if ( ! hbch_is_game_played( $g ) || hbch_is_game_forfait( $g ) ) {
 			return false;
 		}
 		return ! hbch_game_matches_exclude( $g, $exclude );
@@ -131,7 +131,35 @@ function hbch_last_games( WP_REST_Request $request ) {
 
 	$games = hbch_sort_games_by_datetime( $games, true );
 
-	$response = new WP_REST_Response( array_slice( $games, 0, $limit ), 200 );
+	return array_slice( $games, 0, $limit );
+}
+
+/**
+ * Antwort mit Cache-Control-Header passend zur serverseitigen Cache-Dauer.
+ */
+function hbch_rest_games_response( array $games ) {
+	$response = new WP_REST_Response( $games, 200 );
 	$response->header( 'Cache-Control', 'public, max-age=' . hbch_rest_cache_seconds() );
 	return $response;
+}
+
+/**
+ * GET /next-games
+ */
+function hbch_rest_next_games( WP_REST_Request $request ) {
+	return hbch_rest_games_response( hbch_get_next_games(
+		$request->get_param( 'limit' ),
+		(string) $request->get_param( 'exclude' ),
+		$request->get_param( 'include_live' )
+	) );
+}
+
+/**
+ * GET /last-games
+ */
+function hbch_rest_last_games( WP_REST_Request $request ) {
+	return hbch_rest_games_response( hbch_get_last_games(
+		$request->get_param( 'limit' ),
+		(string) $request->get_param( 'exclude' )
+	) );
 }
