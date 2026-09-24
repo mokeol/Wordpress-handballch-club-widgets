@@ -4,6 +4,10 @@
  *
  * Öffentliche, nur lesende REST-Endpunkte für Vereins-Spiele
  * (/wp-json/handballch/v1/next-games und /last-games).
+ *
+ * Die Quelle ist immer die Spielliste des eigenen Vereins. Einen frei
+ * wählbaren "source"-Parameter gibt es bewusst nicht mehr: er erlaubte
+ * beliebig viele authentifizierte Anfragen und Cache-Einträge.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -11,34 +15,38 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 add_action( 'rest_api_init', function () {
+	$common_args = [
+		'limit'   => [
+			'description'       => 'Anzahl Spiele (1–50). Ohne Angabe gilt die Standard-Anzahl aus den Einstellungen.',
+			'sanitize_callback' => 'hbch_normalize_games_limit',
+		],
+		'exclude' => [
+			'description'       => 'Freitext: Spiele, bei denen Teamname, Liga oder Gruppentext diesen Text enthalten, werden ausgeblendet.',
+			'type'              => 'string',
+			'sanitize_callback' => 'sanitize_text_field',
+		],
+	];
+
 	register_rest_route( 'handballch/v1', '/next-games', [
 		'methods'             => 'GET',
 		'callback'            => 'hbch_next_games',
 		'permission_callback' => '__return_true',
+		'args'                => array_merge( $common_args, [
+			'include_live' => [
+				'description'       => 'Ein gerade laufendes Spiel in der Liste behalten.',
+				'type'              => 'boolean',
+				'default'           => false,
+				'sanitize_callback' => 'rest_sanitize_boolean',
+			],
+		] ),
 	] );
 	register_rest_route( 'handballch/v1', '/last-games', [
 		'methods'             => 'GET',
 		'callback'            => 'hbch_last_games',
 		'permission_callback' => '__return_true',
+		'args'                => $common_args,
 	] );
 } );
-
-/**
- * Optionaler source-Parameter: nur https://clubapi.handball.ch/… ist erlaubt,
- * alles andere fällt auf die Vereins-URL zurück.
- */
-function hbch_sanitize_games_source( $source ) {
-	$source = (string) $source;
-	if ( ! $source ) {
-		return hbch_club_games_url();
-	}
-	$scheme = wp_parse_url( $source, PHP_URL_SCHEME );
-	$host   = wp_parse_url( $source, PHP_URL_HOST );
-	if ( $scheme !== 'https' || $host !== 'clubapi.handball.ch' ) {
-		return hbch_club_games_url();
-	}
-	return $source;
-}
 
 function hbch_normalize_games_limit( $value ) {
 	$default = max( 1, (int) hbch_get_setting( 'default_games_limit' ) );
@@ -68,27 +76,28 @@ function hbch_game_matches_exclude( $game, $exclude ) {
 /**
  * GET /next-games: künftige Spiele, aufsteigend sortiert. Forfait-Spiele
  * werden nicht ausgeliefert. "include_live" behält ein laufendes Spiel.
+ * Die Funktion wird auch direkt von den Shortcodes aufgerufen (dann ohne
+ * Args-Verarbeitung), deshalb werden die Werte hier nochmals bereinigt.
  */
 function hbch_next_games( WP_REST_Request $request ) {
-	$source       = hbch_sanitize_games_source( $request->get_param( 'source' ) );
 	$limit        = hbch_normalize_games_limit( $request->get_param( 'limit' ) );
 	$exclude      = sanitize_text_field( (string) $request->get_param( 'exclude' ) );
-	$include_live = (bool) $request->get_param( 'include_live' );
+	$include_live = rest_sanitize_boolean( $request->get_param( 'include_live' ) );
 
-	$games = hbch_fetch_club_games( $source );
+	$games = hbch_fetch_club_games( hbch_club_games_url() );
 
-	$tz  = new DateTimeZone( 'Europe/Zurich' );
-	$now = new DateTime( 'now', $tz );
+	$now = new DateTime( 'now', new DateTimeZone( 'Europe/Zurich' ) );
 
-	$games = array_filter( $games, function ( $g ) use ( $now, $tz, $exclude, $include_live ) {
-		if ( empty( $g['gameDateTime'] ) ) {
+	$games = array_filter( $games, function ( $g ) use ( $now, $exclude, $include_live ) {
+		// Ungültige oder fehlende Datumswerte der API überspringen (kein Fatal Error).
+		$game_date = hbch_game_datetime( $g );
+		if ( ! $game_date ) {
 			return false;
 		}
 		if ( stripos( $g['gameStatus'] ?? '', 'Gespielt' ) !== false || hbch_is_game_forfait( $g ) ) {
 			return false;
 		}
-		$gameDate = new DateTime( $g['gameDateTime'], $tz );
-		if ( $gameDate < $now && ! ( $include_live && hbch_is_game_live( $g ) ) ) {
+		if ( $game_date < $now && ! ( $include_live && hbch_is_game_live( $g ) ) ) {
 			return false;
 		}
 		return ! hbch_game_matches_exclude( $g, $exclude );
@@ -105,11 +114,10 @@ function hbch_next_games( WP_REST_Request $request ) {
  * GET /last-games: gespielte Spiele, neueste zuerst (ohne Forfait).
  */
 function hbch_last_games( WP_REST_Request $request ) {
-	$source  = hbch_sanitize_games_source( $request->get_param( 'source' ) );
 	$limit   = hbch_normalize_games_limit( $request->get_param( 'limit' ) );
 	$exclude = sanitize_text_field( (string) $request->get_param( 'exclude' ) );
 
-	$games = hbch_fetch_club_games( $source );
+	$games = hbch_fetch_club_games( hbch_club_games_url() );
 
 	$games = array_filter( $games, function ( $g ) use ( $exclude ) {
 		if ( empty( $g['gameDateTime'] ) ) {
