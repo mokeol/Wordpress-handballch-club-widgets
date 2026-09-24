@@ -56,6 +56,12 @@ function hbch_ics_fold_line( string $line ): string {
 	return $folded;
 }
 
+/**
+ * Baut den Kalender. Zeiten werden in UTC ausgegeben (DTSTART:…Z): Das ist
+ * ohne VTIMEZONE-Block gültig und wird von allen Kalender-Apps (auch Outlook)
+ * korrekt in die lokale Zeit umgerechnet. Forfait-Spiele fehlen, wie in den
+ * übrigen vereinsweiten Listen.
+ */
 function hbch_ics_build( array $games, string $calendar_name = '' ): string {
 	if ( $calendar_name === '' ) {
 		$calendar_name = hbch_get_setting( 'text_ics_calendar_name' );
@@ -64,7 +70,8 @@ function hbch_ics_build( array $games, string $calendar_name = '' ): string {
 	$uid_host         = wp_parse_url( home_url(), PHP_URL_HOST ) ?: 'localhost';
 
 	$tz  = new DateTimeZone( 'Europe/Zurich' );
-	$now = new DateTime( 'now', new DateTimeZone( 'UTC' ) );
+	$utc = new DateTimeZone( 'UTC' );
+	$now = new DateTime( 'now', $utc );
 
 	$ics  = "BEGIN:VCALENDAR\r\n";
 	$ics .= "VERSION:2.0\r\n";
@@ -80,7 +87,7 @@ function hbch_ics_build( array $games, string $calendar_name = '' ): string {
 	$show_addr  = (bool) hbch_get_setting( 'ics_show_venue_address' );
 
 	foreach ( $games as $game ) {
-		if ( empty( $game['gameDateTime'] ) ) {
+		if ( empty( $game['gameDateTime'] ) || hbch_is_game_forfait( $game ) ) {
 			continue;
 		}
 
@@ -91,6 +98,9 @@ function hbch_ics_build( array $games, string $calendar_name = '' ): string {
 		}
 
 		$end = ( clone $start )->modify( "+{$duration_minutes} minutes" );
+
+		$start_utc = ( clone $start )->setTimezone( $utc );
+		$end_utc   = ( clone $end )->setTimezone( $utc );
 
 		$teamA  = $game['teamAName'] ?? '';
 		$teamB  = $game['teamBName'] ?? '';
@@ -129,8 +139,8 @@ function hbch_ics_build( array $games, string $calendar_name = '' ): string {
 		$ics .= "BEGIN:VEVENT\r\n";
 		$ics .= hbch_ics_fold_line( "UID:" . $uid );
 		$ics .= hbch_ics_fold_line( "DTSTAMP:" . $now->format( 'Ymd\THis\Z' ) );
-		$ics .= hbch_ics_fold_line( "DTSTART;TZID=Europe/Zurich:" . $start->format( 'Ymd\THis' ) );
-		$ics .= hbch_ics_fold_line( "DTEND;TZID=Europe/Zurich:" . $end->format( 'Ymd\THis' ) );
+		$ics .= hbch_ics_fold_line( "DTSTART:" . $start_utc->format( 'Ymd\THis\Z' ) );
+		$ics .= hbch_ics_fold_line( "DTEND:" . $end_utc->format( 'Ymd\THis\Z' ) );
 		$ics .= hbch_ics_fold_line( "SUMMARY:" . hbch_ics_escape( $summary ) );
 		if ( $venue !== '' ) {
 			$ics .= hbch_ics_fold_line( "LOCATION:" . hbch_ics_escape( $venue ) );
@@ -218,7 +228,17 @@ add_action( 'template_redirect', function () {
 	}
 
 	$team_slug = isset( $_GET['team'] ) ? sanitize_key( wp_unslash( $_GET['team'] ) ) : '';
-	$ics       = hbch_ics_get_cached( $team_slug );
+
+	// Unbekannter Team-Slug: normale 404-Seite statt eines leeren Kalenders.
+	if ( $team_slug !== '' && ! hbch_get_team_id( $team_slug ) ) {
+		global $wp_query;
+		$wp_query->set_404();
+		status_header( 404 );
+		nocache_headers();
+		return;
+	}
+
+	$ics = hbch_ics_get_cached( $team_slug );
 
 	$filename = $team_slug !== '' ? 'spielplan-' . $team_slug . '.ics' : 'spielplan.ics';
 
@@ -275,7 +295,7 @@ add_shortcode( 'hbch_ics', function ( $atts ) {
 			</li>
 			<li>
 				<button type="button" class="hbch-ics-dropdown-item hbch-ics-copy-btn" data-target="<?php echo esc_attr( $url_id ); ?>">
-					<span class="hbch-ics-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span>  Kalenderlink kopieren (Android)
+					<span class="hbch-ics-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span> <span class="hbch-ics-label">Kalenderlink kopieren (Android)</span>
 				</button>
 			</li>
 			<li>
@@ -284,7 +304,8 @@ add_shortcode( 'hbch_ics', function ( $atts ) {
 				</a>
 			</li>
 			<li>
-				<button type="button" class="hbch-ics-dropdown-item hbch-ics-share-btn" hidden data-url="<?php echo esc_attr( $ics_url ); ?>" data-title="<?php echo esc_attr( hbch_get_setting( 'text_ics_calendar_name' ) ); ?>">
+				<?php /* hidden + display:none: die Klasse .hbch-ics-dropdown-item setzt display:block und würde das hidden-Attribut sonst überstimmen. */ ?>
+				<button type="button" class="hbch-ics-dropdown-item hbch-ics-share-btn" hidden style="display:none" data-url="<?php echo esc_attr( $ics_url ); ?>" data-title="<?php echo esc_attr( hbch_get_setting( 'text_ics_calendar_name' ) ); ?>">
 					<span class="hbch-ics-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg></span>  Kalenderlink teilen (WhatsApp, Mail, …)
 				</button>
 			</li>
@@ -303,48 +324,80 @@ add_action( 'wp_footer', function () {
 	}
 	?>
 	<script>
-	if (navigator.share) {
-		document.querySelectorAll('.hbch-ics-share-btn').forEach(function (btn) {
-			btn.hidden = false;
+	(function () {
+		if (navigator.share) {
+			document.querySelectorAll('.hbch-ics-share-btn').forEach(function (btn) {
+				btn.hidden = false;
+				btn.style.display = '';
+			});
+		}
+
+		// Zwischenablage: moderner Weg nur in sicheren Kontexten (https), sonst Fallback.
+		function copyText(text) {
+			if (navigator.clipboard && window.isSecureContext) {
+				return navigator.clipboard.writeText(text);
+			}
+			return new Promise(function (resolve, reject) {
+				var ta = document.createElement('textarea');
+				ta.value = text;
+				ta.setAttribute('readonly', '');
+				ta.style.position = 'fixed';
+				ta.style.opacity = '0';
+				document.body.appendChild(ta);
+				ta.select();
+				var ok = false;
+				try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+				document.body.removeChild(ta);
+				ok ? resolve() : reject();
+			});
+		}
+
+		document.addEventListener('click', function (e) {
+			var toggle = e.target.closest('.hbch-ics-dropdown-toggle');
+			if (toggle) {
+				var menu = toggle.nextElementSibling;
+				var isOpen = !menu.hidden;
+				menu.hidden = isOpen;
+				toggle.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+				return;
+			}
+
+			if (!e.target.closest('.hbch-ics-dropdown')) {
+				document.querySelectorAll('.hbch-ics-dropdown-menu').forEach(function (menu) {
+					menu.hidden = true;
+				});
+				document.querySelectorAll('.hbch-ics-dropdown-toggle').forEach(function (btn) {
+					btn.setAttribute('aria-expanded', 'false');
+				});
+				return;
+			}
+
+			// closest(): der Klick kann auf dem Icon oder Text im Button landen.
+			var copyBtn = e.target.closest('.hbch-ics-copy-btn');
+			if (copyBtn) {
+				var el = document.getElementById(copyBtn.dataset.target);
+				if (!el) return;
+				var label = copyBtn.querySelector('.hbch-ics-label');
+				if (label && !label.dataset.original) {
+					label.dataset.original = label.textContent;
+				}
+				copyText(el.textContent.trim()).then(function () {
+					if (!label) return;
+					label.textContent = 'Kopiert!';
+					setTimeout(function () { label.textContent = label.dataset.original; }, 1500);
+				}).catch(function () {});
+				return;
+			}
+
+			var shareBtn = e.target.closest('.hbch-ics-share-btn');
+			if (shareBtn && navigator.share) {
+				navigator.share({
+					title: shareBtn.dataset.title,
+					url: shareBtn.dataset.url
+				}).catch(function () {});
+			}
 		});
-	}
-
-	document.addEventListener('click', function (e) {
-		var toggle = e.target.closest('.hbch-ics-dropdown-toggle');
-		if (toggle) {
-			var menu = toggle.nextElementSibling;
-			var isOpen = !menu.hidden;
-			menu.hidden = isOpen;
-			toggle.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
-			return;
-		}
-
-		if (!e.target.closest('.hbch-ics-dropdown')) {
-			document.querySelectorAll('.hbch-ics-dropdown-menu').forEach(function (menu) {
-				menu.hidden = true;
-			});
-			document.querySelectorAll('.hbch-ics-dropdown-toggle').forEach(function (btn) {
-				btn.setAttribute('aria-expanded', 'false');
-			});
-		}
-
-		if (e.target.classList.contains('hbch-ics-copy-btn')) {
-			var el = document.getElementById(e.target.dataset.target);
-			if (!el) return;
-			navigator.clipboard.writeText(el.textContent.trim()).then(function () {
-				var original = e.target.textContent;
-				e.target.textContent = 'Kopiert!';
-				setTimeout(function () { e.target.textContent = original; }, 1500);
-			});
-		}
-
-		if (e.target.classList.contains('hbch-ics-share-btn')) {
-			navigator.share({
-				title: e.target.dataset.title,
-				url: e.target.dataset.url
-			}).catch(function () {});
-		}
-	});
+	})();
 	</script>
 	<?php
 } );
