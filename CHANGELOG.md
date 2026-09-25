@@ -4,6 +4,27 @@ Die Versionshistorie steht in dieser Datei; der Reiter „Changelog“ im Adminp
 Bei jedem Release: Header-Version **und** Konstante `HBCH_VERSION` in `handballch-api.php` gemeinsam anpassen.
 Der Dateiname muss exakt `CHANGELOG.md` lauten (auf Linux-Servern case-sensitive).
 
+## 1.0.6 — Performance & Aufräumen (keine funktionalen Änderungen)
+- Performance: `hbch_page_uses_plugin()` (entscheidet, ob CSS/JS auf einer Seite geladen werden) wird jetzt pro
+  Seite als Transient gecacht, statt bei jedem Seitenaufruf den Seiteninhalt, referenzierte wiederverwendbare
+  Blöcke und alle Text-/HTML-/Block-Widgets neu zu scannen. Eigener Versionszähler
+  (`hbch_content_cache_version()`), der beim Speichern eines Beitrags oder der Widgets hochzählt (Autosaves und
+  Revisionen zählen nicht mit); die zugehörigen Transients werden auch von „Cache jetzt leeren“ (Reiter Diagnose)
+  mit entfernt.
+- Aufräumen: `hbch_render_games_table_next()` und `hbch_render_games_table_last()` sind zu einer Funktion
+  `hbch_render_games_table( $games, $table_id, $variant, $show_league )` zusammengelegt (rund 80 % identischer
+  Code). Die alten Funktionsnamen bleiben als dünne Wrapper erhalten, falls ein Child-Theme oder Snippet sie
+  direkt aufruft.
+- Aufräumen: Die Karten-Ansicht (`layout="cards"`, Default) von `hbch_render_home_next_games()` und
+  `hbch_render_home_last_games()` ist in eine gemeinsame Funktion `hbch_render_home_games_cards()` ausgelagert.
+- Aufräumen: `assets/js/blocks-editor.js` nutzt für die Blöcke „Rangliste“, „Team – Spielplan / Resultate“ und
+  „Countdown“ jetzt eine gemeinsame `registerHbchTeamBlock()`-Factory (Team-Auswahl, „keine Teams
+  konfiguriert“-Hinweis, Farbpanel) statt dreifach denselben Code.
+- Kleinere Korrektur: doppeltes `"` im HTML-Attribut der Liga-Spalten-Kopfzeile entfernt (Tippfehler seit 1.0.0,
+  wirkungslos, aber ungültiges HTML).
+- Die Ausgabe (HTML/CSS-Klassen, Verhalten aller Shortcodes und Blöcke) ist unverändert zu 1.0.5.
+- `uninstall.php` entfernt zusätzlich die neue Option `hbch_content_cache_version`.
+
 ## 1.0.5 — Robusterer Cache, weniger JavaScript, Aufräumen
 - Neu: Cache-Versionszähler. Jeder Transient-Schlüssel enthält die Version, „Cache jetzt leeren“ zählt sie hoch. Das
   funktioniert auch mit externem Object-Cache (Redis/Memcached). Beim Speichern der Einstellungen wird der Cache
