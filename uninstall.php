@@ -16,6 +16,7 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 delete_option( 'hbch_settings' );
 delete_option( 'hbch_cache_version' );
+delete_option( 'hbch_content_cache_version' );
 
 global $wpdb;
 
