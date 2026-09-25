@@ -4,7 +4,7 @@ Tags: handball, sports, standings, fixtures, calendar
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.5
+Stable tag: 1.0.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -116,6 +116,10 @@ The API has no "running" status, so a game counts as live for 90 minutes after k
 No, it is built for the API of the Swiss Handball Federation.
 
 == Changelog ==
+= 1.0.6 =
+* Performance: whether a page loads the plugin's CSS/JS is now cached per page (transient, invalidated on post/widget save) instead of being recomputed on every single page load.
+* Internal cleanup: the near-duplicate "next games" / "last games" table renderers, and the "next"/"last" card renderers of the club-wide widgets, are now single shared functions; the block editor's four simple blocks share one factory instead of repeating the same boilerplate three times. No change to markup, CSS classes, or behaviour.
+* Minor fix: a stray duplicated quote in the league-column table header markup (harmless but invalid HTML, present since 1.0.0) is removed.
 = 1.0.5 =
 * New: cache version counter. "Clear cache" now also works with an external object cache (Redis/Memcached), and saving the settings clears the cache automatically.
 * New: if the API cannot be reached, the last known data is shown (up to 7 days) and a short failure marker (60 seconds) avoids waiting for the API on every page view.
