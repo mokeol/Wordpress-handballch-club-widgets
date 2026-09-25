@@ -97,27 +97,56 @@ function hbch_content_uses_plugin( $content ) {
 }
 
 /**
- * Nutzt die aktuelle Seite das Plugin? Geprüft werden Seiteninhalt,
- * eingebundene wiederverwendbare Blöcke (wp:block-Referenzen) und Widgets.
- * Steht ein Shortcode woanders (Theme-Template, Page-Builder), erzwingt
- *   add_filter( 'hbch_force_assets', '__return_true' );
- * das Laden auf jeder Seite.
+ * Cache-Version für die "Nutzt diese Seite das Plugin?"-Erkennung
+ * (hbch_page_uses_plugin()). Bewusst unabhängig von der API-Cache-Version
+ * (hbch_cache_version() in api.php): hier geht es um Seiteninhalt und
+ * Widgets, nicht um handball.ch-Daten. Hochzählen macht alle bisher
+ * berechneten Ergebnisse ungültig.
  */
-function hbch_page_uses_plugin() {
-	static $result = null;
-	if ( $result !== null ) {
-		return $result;
+function hbch_content_cache_version( $reset = false ) {
+	static $version = null;
+	if ( $reset ) {
+		$version = null;
 	}
-
-	if ( apply_filters( 'hbch_force_assets', false ) ) {
-		return $result = true;
+	if ( $version === null ) {
+		$version = max( 1, (int) get_option( 'hbch_content_cache_version', 1 ) );
 	}
+	return $version;
+}
 
+/**
+ * Zählt die Content-Cache-Version hoch: bei jedem Beitrags-Speichern (der
+ * Seiteninhalt oder ein referenzierter wiederverwendbarer Block könnte sich
+ * geändert haben) und beim Speichern der Text-/HTML-/Block-Widgets.
+ * Autosaves und Revisionen zählen bewusst nicht mit, sonst würde der Cache
+ * schon beim normalen Editieren im Block-Editor laufend verfallen.
+ */
+function hbch_bump_content_cache_version( $post_id = 0 ) {
+	if ( ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) || wp_is_post_revision( $post_id ) ) {
+		return;
+	}
+	update_option( 'hbch_content_cache_version', hbch_content_cache_version() + 1, true );
+	hbch_content_cache_version( true );
+}
+add_action( 'save_post', 'hbch_bump_content_cache_version' );
+add_action( 'deleted_post', 'hbch_bump_content_cache_version' );
+add_action( 'update_option_widget_text', 'hbch_bump_content_cache_version' );
+add_action( 'add_option_widget_text', 'hbch_bump_content_cache_version' );
+add_action( 'update_option_widget_custom_html', 'hbch_bump_content_cache_version' );
+add_action( 'add_option_widget_custom_html', 'hbch_bump_content_cache_version' );
+add_action( 'update_option_widget_block', 'hbch_bump_content_cache_version' );
+add_action( 'add_option_widget_block', 'hbch_bump_content_cache_version' );
+
+/**
+ * Reine, ungecachte Berechnung von hbch_page_uses_plugin(): Seiteninhalt,
+ * referenzierte wiederverwendbare Blöcke und alle Text-/HTML-/Block-Widgets.
+ */
+function hbch_compute_page_uses_plugin() {
 	if ( is_singular() ) {
 		$post = get_post();
 		if ( $post ) {
 			if ( hbch_content_uses_plugin( $post->post_content ) ) {
-				return $result = true;
+				return true;
 			}
 
 			if ( preg_match_all( '/<!--\s*wp:block\s+(\{[^}]*\})\s*\/?-->/', $post->post_content, $matches ) ) {
@@ -129,7 +158,7 @@ function hbch_page_uses_plugin() {
 					}
 					$ref_post = get_post( $ref_id );
 					if ( $ref_post && hbch_content_uses_plugin( $ref_post->post_content ) ) {
-						return $result = true;
+						return true;
 					}
 				}
 			}
@@ -144,12 +173,51 @@ function hbch_page_uses_plugin() {
 		foreach ( $instances as $instance ) {
 			$content = is_array( $instance ) ? ( $instance['content'] ?? $instance['text'] ?? '' ) : '';
 			if ( hbch_content_uses_plugin( $content ) ) {
-				return $result = true;
+				return true;
 			}
 		}
 	}
 
-	return $result = false;
+	return false;
+}
+
+/**
+ * Nutzt die aktuelle Seite das Plugin? Geprüft werden Seiteninhalt,
+ * eingebundene wiederverwendbare Blöcke (wp:block-Referenzen) und Widgets.
+ * Steht ein Shortcode woanders (Theme-Template, Page-Builder), erzwingt
+ *   add_filter( 'hbch_force_assets', '__return_true' );
+ * das Laden auf jeder Seite.
+ *
+ * Das Ergebnis wird pro Seite als Transient gecacht (Schlüssel enthält die
+ * Content-Cache-Version, siehe oben): ohne diesen Cache würde die komplette
+ * Prüfung — Scan des Seiteninhalts, Nachladen referenzierter
+ * wiederverwendbarer Blöcke, Durchlauf aller Text-/HTML-/Block-Widgets — bei
+ * jedem einzelnen Seitenaufruf erneut laufen. "Cache jetzt leeren" im Reiter
+ * Diagnose räumt auch diese Transients mit auf (Präfix "hbch_").
+ */
+function hbch_page_uses_plugin() {
+	static $result = null;
+	if ( $result !== null ) {
+		return $result;
+	}
+
+	if ( apply_filters( 'hbch_force_assets', false ) ) {
+		return $result = true;
+	}
+
+	$cache_id  = is_singular() ? ( 'post_' . get_queried_object_id() ) : 'archive';
+	$cache_key = 'hbch_uses_plugin_v' . hbch_content_cache_version() . '_' . $cache_id;
+
+	$cached = get_transient( $cache_key );
+	if ( $cached === '1' || $cached === '0' ) {
+		return $result = ( $cached === '1' );
+	}
+
+	$found = hbch_compute_page_uses_plugin();
+
+	set_transient( $cache_key, $found ? '1' : '0', DAY_IN_SECONDS );
+
+	return $result = $found;
 }
 
 add_action( 'wp_enqueue_scripts', function () {
