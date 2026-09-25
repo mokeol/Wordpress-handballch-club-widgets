@@ -683,6 +683,11 @@ function hbch_get_default_css_section( $section ) {
 	return '';
 }
 
+/**
+ * Standard-CSS eines Reiters (nur zur Referenz), eingeklappt hinter
+ * <details>: die Textarea war mit 14 sichtbaren Zeilen der grösste
+ * Platzfresser im Panel und wird ohnehin selten gebraucht.
+ */
 function hbch_field_default_css_display( $sections ) {
 	$blocks = [];
 	foreach ( (array) $sections as $section ) {
@@ -693,7 +698,9 @@ function hbch_field_default_css_display( $sections ) {
 	}
 
 	printf(
-		'<textarea readonly rows="14" cols="60" class="large-text code" style="background:#f0f0f1;color:#555;" onclick="this.select()">%s</textarea><p class="description">Das mitgelieferte Standard-CSS dieses Widgets (nur zur Referenz). Änderungen ins Feld "Eigenes CSS" unten eintragen: es wird danach geladen und kann diese Regeln überschreiben.</p>',
+		'<details class="hbch-admin-details"><summary>Standard-CSS anzeigen (nur zur Referenz)</summary>' .
+		'<textarea readonly rows="14" cols="60" class="large-text code" style="background:#f0f0f1;color:#555;margin-top:0.5em;" onclick="this.select()">%s</textarea>' .
+		'</details><p class="description">Änderungen ins Feld "Eigenes CSS" unten eintragen: es wird danach geladen und kann diese Regeln überschreiben.</p>',
 		esc_textarea( implode( "\n\n", $blocks ) )
 	);
 }
