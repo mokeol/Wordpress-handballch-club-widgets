@@ -92,6 +92,34 @@ function hbch_render_shortcode_preview( $html, $extra_class = '' ) {
 }
 
 /**
+ * Öffnet einen <details>-Block um einen ganzen Live-Vorschau-Abschnitt
+ * (Team-Auswahl + gerenderte Shortcodes/Blöcke). Standardmässig
+ * eingeklappt, damit die Reiter nicht mit mehreren Vorschauen (und den
+ * dazugehörigen do_shortcode()-Aufrufen) vollgestopft und lang wirken.
+ * Wichtig: Die PHP-Seite rendert die Vorschau serverseitig trotzdem immer
+ * mit (sie wird nur per CSS/HTML "hidden" ausgeliefert) — eingeklappt
+ * spart also nur Platz auf dem Bildschirm, nicht den API-Request selbst.
+ */
+function hbch_render_preview_details_start( $summary = 'Vorschau anzeigen' ) {
+	printf( '<details class="hbch-admin-details"><summary>%s</summary><div style="margin-top:0.5em;">', esc_html( $summary ) );
+}
+function hbch_render_preview_details_end() {
+	echo '</div></details>';
+}
+
+/**
+ * Kurzer Einleitungssatz für einen Abschnitt, optional gefolgt von einem
+ * eingeklappten <details>-Block mit einer ausführlicheren Erklärung. Hält
+ * die Reiter auf den ersten Blick knapp, ohne Detailwissen zu verlieren.
+ */
+function hbch_render_section_intro( $short_html, $more_html = '' ) {
+	echo '<p>' . $short_html . '</p>';
+	if ( $more_html !== '' ) {
+		echo '<details class="hbch-admin-details"><summary>Mehr erklären</summary><div style="margin-top:0.5em;">' . $more_html . '</div></details>';
+	}
+}
+
+/**
  * Farbfeld einer Farbrolle. data-hbch-var verknüpft das Feld mit der
  * CSS-Variable für die Sofort-Vorschau.
  */
@@ -809,6 +837,7 @@ add_action( 'admin_init', function () {
 	// Reiter: Rangliste ([hbch_ranking], [hbch_team_ranking])
 	// =================================================================
 	add_settings_section( 'hbch_rangliste_vorschau', 'Live-Vorschau', function () {
+		hbch_render_preview_details_start();
 		hbch_render_preview_team_selector( 'rangliste' );
 		$slug = hbch_get_preview_team_slug();
 		if ( $slug !== '' ) {
@@ -817,14 +846,17 @@ add_action( 'admin_init', function () {
 			echo '<p style="margin-top:1.5em;"><strong>[hbch_team_ranking]</strong> (detailliert, mit Auf-/Abstiegszonen):</p>';
 			hbch_render_shortcode_preview( do_shortcode( '[hbch_team_ranking team="' . esc_attr( $slug ) . '"]' ) );
 		}
+		hbch_render_preview_details_end();
 	}, 'hbch-tab-rangliste' );
 
 	add_settings_section( 'hbch_rangliste_spalten', 'Spalten', function () {
-		$row_labels = [ 'rank' => 'rank (#)', 'team' => 'team', 'games' => 'games (Sp)', 'wins' => 'wins (S)', 'draws' => 'draws (U)', 'losses' => 'losses (N)', 'goals' => 'goals (Tore)', 'diff' => 'diff (+/-)', 'points' => 'points (Pkt)', 'ppg' => 'ppg (Pkt/Spiel)' ];
-		echo '<p>Die Reihenfolge der Spalten ist fest, jede kann für Kompakt und Detailliert unabhängig ein-/ausgeblendet werden. Die Kopfzeile ("Text") gilt für beide Varianten. Pro Variante muss mindestens eine Spalte aktiv bleiben.</p>';
+		hbch_render_section_intro(
+			'Die Reihenfolge der Spalten ist fest, jede kann für Kompakt und Detailliert unabhängig ein-/ausgeblendet werden.',
+			'Die Kopfzeile ("Text") gilt für beide Varianten. Pro Variante muss mindestens eine Spalte aktiv bleiben.'
+		);
 		hbch_render_field_table(
 			'ranking_columns',
-			$row_labels,
+			$row_labels = [ 'rank' => 'rank (#)', 'team' => 'team', 'games' => 'games (Sp)', 'wins' => 'wins (S)', 'draws' => 'draws (U)', 'losses' => 'losses (N)', 'goals' => 'goals (Tore)', 'diff' => 'diff (+/-)', 'points' => 'points (Pkt)', 'ppg' => 'ppg (Pkt/Spiel)' ],
 			[
 				'compact'  => 'Kompakt<br><span style="font-weight:normal;">[hbch_ranking]</span>',
 				'detailed' => 'Detailliert<br><span style="font-weight:normal;">[hbch_team_ranking]</span>',
@@ -868,7 +900,10 @@ add_action( 'admin_init', function () {
 	}, 'hbch-tab-rangliste', 'hbch_rangliste_cache' );
 
 	add_settings_section( 'hbch_rangliste_css', 'Standard- & eigenes CSS', function () {
-		echo '<p>Oben das mitgelieferte Standard-CSS (nur Referenz), darunter das freie Feld, das NACH dem Standard-CSS geladen wird. Farben besser im Reiter "Farben" einstellen. Betrifft die Klassen <code>.hbch-ranking-*</code>, <code>.hbch-rank-*</code>, <code>.hbch-row-highlight*</code>, <code>.hbch-col-*</code>, <code>.hbch-zone-*</code>, <code>.hbch-team-logo-group/-dual</code>.</p>';
+		hbch_render_section_intro(
+			'Oben das mitgelieferte Standard-CSS (nur Referenz), darunter das freie Feld "Eigenes CSS", das danach geladen wird.',
+			'Farben besser im Reiter "Farben" einstellen. Betrifft die Klassen <code>.hbch-ranking-*</code>, <code>.hbch-rank-*</code>, <code>.hbch-row-highlight*</code>, <code>.hbch-col-*</code>, <code>.hbch-zone-*</code>, <code>.hbch-team-logo-group/-dual</code>.'
+		);
 	}, 'hbch-tab-rangliste' );
 	add_settings_field( 'css_ranking_default', 'Standard-CSS (Referenz)', function () {
 		hbch_field_default_css_display( [ 'rangliste', 'shared' ] );
@@ -881,6 +916,7 @@ add_action( 'admin_init', function () {
 	// Reiter: Team-Spielplan ([hbch_team_next_games], [hbch_team_last_games])
 	// =================================================================
 	add_settings_section( 'hbch_games_vorschau', 'Live-Vorschau', function () {
+		hbch_render_preview_details_start();
 		hbch_render_preview_team_selector( 'teamspiele' );
 		$slug = hbch_get_preview_team_slug();
 		if ( $slug !== '' ) {
@@ -889,10 +925,14 @@ add_action( 'admin_init', function () {
 			echo '<p style="margin-top:1.5em;"><strong>[hbch_team_last_games]</strong> (gespielte Spiele — teilt sich alle Einstellungen dieses Reiters mit [hbch_team_next_games]):</p>';
 			hbch_render_shortcode_preview( do_shortcode( '[hbch_team_last_games team="' . esc_attr( $slug ) . '"]' ) );
 		}
+		hbch_render_preview_details_end();
 	}, 'hbch-tab-teamspiele' );
 
 	add_settings_section( 'hbch_games_felder', 'Felder', function () {
-		echo '<p>Diese Felder liefert die handball.ch-API pro Spiel; sie sind pro Shortcode unabhängig ein-/ausblendbar. "Zeit" gibt es nur bei [hbch_team_next_games], "Details" (Spaltenkopf über dem Matchcenter-Link) nur bei [hbch_team_last_games]; die jeweils andere Checkbox fehlt deshalb absichtlich. Zeilen ohne eigenen Anzeigetext (Halladresse, Spielart, Link, Kurzname mobil, Doppel-Logo) brauchen kein Textfeld. "Auf Mobile anzeigen" gibt es nur bei Halle, Zuschauer und Matchcenter-Link, den Feldern mit eigener Spalte. Ist keine Halle/Runde/Spielart/Zuschauer-Angabe aktiv bzw. der Link aus, verschwindet die Spalte ganz. "LIVE" (nur [hbch_team_next_games]) ersetzt Datum+Zeit durch einen verlinkten Live-Badge. Da handball.ch keinen "läuft"-Status liefert, gilt ein Spiel 90 Minuten ab Anpfiff als live (per Filter <code>hbch_live_game_duration_minutes</code> anpassbar).</p>';
+		hbch_render_section_intro(
+			'Diese Felder liefert die handball.ch-API pro Spiel; sie sind pro Shortcode ([hbch_team_next_games]/[hbch_team_last_games]) unabhängig ein-/ausblendbar.',
+			'"Zeit" gibt es nur bei [hbch_team_next_games], "Details" (Spaltenkopf über dem Matchcenter-Link) nur bei [hbch_team_last_games]; die jeweils andere Checkbox fehlt deshalb absichtlich. Zeilen ohne eigenen Anzeigetext (Halladresse, Spielart, Link, Kurzname mobil, Doppel-Logo) brauchen kein Textfeld. "Auf Mobile anzeigen" gibt es nur bei Halle, Zuschauer und Matchcenter-Link, den Feldern mit eigener Spalte. Ist keine Halle/Runde/Spielart/Zuschauer-Angabe aktiv bzw. der Link aus, verschwindet die Spalte ganz. "LIVE" (nur [hbch_team_next_games]) ersetzt Datum+Zeit durch einen verlinkten Live-Badge. Da handball.ch keinen "läuft"-Status liefert, gilt ein Spiel 90 Minuten ab Anpfiff als live (per Filter <code>hbch_live_game_duration_minutes</code> anpassbar).'
+		);
 		hbch_render_field_table(
 			'games_fields',
 			[
@@ -934,7 +974,10 @@ add_action( 'admin_init', function () {
 	}, 'hbch-tab-teamspiele', 'hbch_games_cache' );
 
 	add_settings_section( 'hbch_games_css', 'Standard- & eigenes CSS', function () {
-		echo '<p>Oben das mitgelieferte Standard-CSS (nur Referenz), darunter das freie Feld, das NACH dem Standard-CSS geladen wird. Farben besser im Reiter "Farben" einstellen. Betrifft die Klassen <code>.hbch-game-row</code>, <code>.hbch-team-cell</code>, <code>.hbch-result-cell</code>, <code>.hbch-score-badge</code>, <code>.hbch-priority-*</code>, <code>.hbch-col-*</code> in <code>[hbch_team_next_games]</code>/<code>[hbch_team_last_games]</code>.</p>';
+		hbch_render_section_intro(
+			'Oben das mitgelieferte Standard-CSS (nur Referenz), darunter das freie Feld "Eigenes CSS", das danach geladen wird.',
+			'Farben besser im Reiter "Farben" einstellen. Betrifft die Klassen <code>.hbch-game-row</code>, <code>.hbch-team-cell</code>, <code>.hbch-result-cell</code>, <code>.hbch-score-badge</code>, <code>.hbch-priority-*</code>, <code>.hbch-col-*</code> in <code>[hbch_team_next_games]</code>/<code>[hbch_team_last_games]</code>.'
+		);
 	}, 'hbch-tab-teamspiele' );
 	add_settings_field( 'css_games_default', 'Standard-CSS (Referenz)', function () {
 		hbch_field_default_css_display( [ 'teamspiele', 'shared' ] );
@@ -947,14 +990,19 @@ add_action( 'admin_init', function () {
 	// Reiter: Vereins-Spielplan ([hbch_home_next_games], [hbch_home_last_games])
 	// =================================================================
 	add_settings_section( 'hbch_home_vorschau', 'Live-Vorschau', function () {
+		hbch_render_preview_details_start();
 		echo '<p><strong>[hbch_home_next_games limit="2"]</strong>:</p>';
 		hbch_render_shortcode_preview( do_shortcode( '[hbch_home_next_games limit="2"]' ) );
 		echo '<p style="margin-top:1.5em;"><strong>[hbch_home_last_games limit="2"]</strong>:</p>';
 		hbch_render_shortcode_preview( do_shortcode( '[hbch_home_last_games limit="2"]' ) );
+		hbch_render_preview_details_end();
 	}, 'hbch-tab-startseite' );
 
 	add_settings_section( 'hbch_home_felder', 'Felder', function () {
-		echo '<p>Dieselben Felder wie bei "Team-Spielplan" (ausser Datum/Zeit/Link/Details), ebenfalls pro Shortcode unabhängig ein-/ausblendbar. Kurznamen gibt es hier nicht: die Vereins-Spielliste liefert keine, Teamnamen werden auf Mobile deshalb ausgeblendet statt gekürzt. "Auf Mobile anzeigen" bei Halle steuert in beiden Widgets dieselbe Zusatzzeile (Datum/Halle/Zuschauer/Runde/Spielart), Default aus. "LIVE" (nur [hbch_home_next_games]) ersetzt Datum+Zeit durch einen verlinkten Live-Badge, sobald ein Spiel läuft (90 Minuten ab Anpfiff, per Filter <code>hbch_live_game_duration_minutes</code> anpassbar).</p>';
+		hbch_render_section_intro(
+			'Dieselben Felder wie bei "Team-Spielplan" (ausser Datum/Zeit/Link/Details), ebenfalls pro Shortcode unabhängig ein-/ausblendbar.',
+			'Kurznamen gibt es hier nicht: die Vereins-Spielliste liefert keine, Teamnamen werden auf Mobile deshalb ausgeblendet statt gekürzt. "Auf Mobile anzeigen" bei Halle steuert in beiden Widgets dieselbe Zusatzzeile (Datum/Halle/Zuschauer/Runde/Spielart), Default aus. "LIVE" (nur [hbch_home_next_games]) ersetzt Datum+Zeit durch einen verlinkten Live-Badge, sobald ein Spiel läuft (90 Minuten ab Anpfiff, per Filter <code>hbch_live_game_duration_minutes</code> anpassbar).'
+		);
 		hbch_render_field_table(
 			'home_fields',
 			[
@@ -986,7 +1034,10 @@ add_action( 'admin_init', function () {
 	}, 'hbch-tab-startseite', 'hbch_home_limit' );
 
 	add_settings_section( 'hbch_home_css', 'Standard- & eigenes CSS', function () {
-		echo '<p>Oben das mitgelieferte Standard-CSS (nur Referenz), darunter das freie Feld, das NACH dem Standard-CSS geladen wird. Farben besser im Reiter "Farben" einstellen. Betrifft die Klassen <code>.hbch-home-result-grid</code>, <code>.hbch-result-*</code>, <code>.hbch-league</code>, <code>.hbch-venue</code>, <code>.hbch-team-logo-score</code>, <code>.hbch-score-result</code>, <code>.hbch-game-datetime</code> in <code>[hbch_home_next_games]</code>/<code>[hbch_home_last_games]</code>.</p>';
+		hbch_render_section_intro(
+			'Oben das mitgelieferte Standard-CSS (nur Referenz), darunter das freie Feld "Eigenes CSS", das danach geladen wird.',
+			'Farben besser im Reiter "Farben" einstellen. Betrifft die Klassen <code>.hbch-home-result-grid</code>, <code>.hbch-result-*</code>, <code>.hbch-league</code>, <code>.hbch-venue</code>, <code>.hbch-team-logo-score</code>, <code>.hbch-score-result</code>, <code>.hbch-game-datetime</code> in <code>[hbch_home_next_games]</code>/<code>[hbch_home_last_games]</code>.'
+		);
 	}, 'hbch-tab-startseite' );
 	add_settings_field( 'css_home_default', 'Standard-CSS (Referenz)', function () {
 		hbch_field_default_css_display( [ 'startseite', 'shared' ] );
@@ -999,11 +1050,13 @@ add_action( 'admin_init', function () {
 	// Reiter: Countdown ([hbch_next_game])
 	// =================================================================
 	add_settings_section( 'hbch_countdown_vorschau', 'Live-Vorschau', function () {
+		hbch_render_preview_details_start();
 		hbch_render_preview_team_selector( 'countdown' );
 		$slug = hbch_get_preview_team_slug();
 		if ( $slug !== '' ) {
 			hbch_render_shortcode_preview( do_shortcode( '[hbch_next_game team="' . esc_attr( $slug ) . '"]' ) );
 		}
+		hbch_render_preview_details_end();
 	}, 'hbch-tab-countdown' );
 
 	add_settings_section( 'hbch_countdown_texte', 'Texte', function () {}, 'hbch-tab-countdown' );
@@ -1022,7 +1075,7 @@ add_action( 'admin_init', function () {
 	}
 
 	add_settings_section( 'hbch_countdown_anzeige', 'Felder', function () {
-		echo '<p>Es gibt nur einen Shortcode ([hbch_next_game]), deshalb nur eine Häkchen-Spalte; keines der Felder hat einen eigenen Anzeigetext.</p>';
+		hbch_render_section_intro( 'Es gibt nur einen Shortcode ([hbch_next_game]), deshalb nur eine Häkchen-Spalte; keines der Felder hat einen eigenen Anzeigetext.' );
 		hbch_render_field_table(
 			'countdown_fields',
 			[
@@ -1042,7 +1095,10 @@ add_action( 'admin_init', function () {
 	}, 'hbch-tab-countdown', 'hbch_countdown_cache' );
 
 	add_settings_section( 'hbch_countdown_css', 'Standard- & eigenes CSS', function () {
-		echo '<p>Oben das mitgelieferte Standard-CSS (nur Referenz), darunter das freie Feld, das NACH dem Standard-CSS geladen wird. Farben besser im Reiter "Farben" oder direkt am Block einstellen (z. B. eine andere Akzentfarbe für die Countdown-Zahlen einer bestimmten Seite). Betrifft die Klassen <code>.hbch-next-game-*</code>, <code>.hbch-countdown-number</code> in <code>[hbch_next_game]</code>.</p>';
+		hbch_render_section_intro(
+			'Oben das mitgelieferte Standard-CSS (nur Referenz), darunter das freie Feld "Eigenes CSS", das danach geladen wird.',
+			'Farben besser im Reiter "Farben" oder direkt am Block einstellen (z. B. eine andere Akzentfarbe für die Countdown-Zahlen einer bestimmten Seite). Betrifft die Klassen <code>.hbch-next-game-*</code>, <code>.hbch-countdown-number</code> in <code>[hbch_next_game]</code>.'
+		);
 	}, 'hbch-tab-countdown' );
 	add_settings_field( 'css_nextgame_default', 'Standard-CSS (Referenz)', function () {
 		hbch_field_default_css_display( 'countdown' );
@@ -1055,6 +1111,7 @@ add_action( 'admin_init', function () {
 	// Reiter: ICS-Export ([hbch_ics])
 	// =================================================================
 	add_settings_section( 'hbch_ics_vorschau', 'Live-Vorschau', function () {
+		hbch_render_preview_details_start();
 		echo '<p><strong>[hbch_ics]</strong> (ganzer Verein):</p>';
 		hbch_render_shortcode_preview( do_shortcode( '[hbch_ics]' ) );
 
@@ -1064,6 +1121,7 @@ add_action( 'admin_init', function () {
 			echo '<p style="margin-top:1.5em;"><strong>[hbch_ics team="' . esc_html( $slug ) . '"]</strong>:</p>';
 			hbch_render_shortcode_preview( do_shortcode( '[hbch_ics team="' . esc_attr( $slug ) . '"]' ) );
 		}
+		hbch_render_preview_details_end();
 	}, 'hbch-tab-ics' );
 
 	add_settings_section( 'hbch_ics_texte', 'Texte', function () {}, 'hbch-tab-ics' );
@@ -1097,7 +1155,10 @@ add_action( 'admin_init', function () {
 	}
 
 	add_settings_section( 'hbch_ics_css', 'Standard- & eigenes CSS (Dropdown-Button)', function () {
-		echo '<p>Oben das mitgelieferte Standard-CSS (nur Referenz), darunter das freie Feld, das NACH dem Standard-CSS geladen wird. Farben besser im Reiter "Farben" einstellen. Betrifft die Klassen <code>.hbch-ics-dropdown*</code> des "Kalender abonnieren"-Buttons.</p>';
+		hbch_render_section_intro(
+			'Oben das mitgelieferte Standard-CSS (nur Referenz), darunter das freie Feld "Eigenes CSS", das danach geladen wird.',
+			'Farben besser im Reiter "Farben" einstellen. Betrifft die Klassen <code>.hbch-ics-dropdown*</code> des "Kalender abonnieren"-Buttons.'
+		);
 	}, 'hbch-tab-ics' );
 	add_settings_field( 'css_ics_default', 'Standard-CSS (Referenz)', function () {
 		hbch_field_default_css_display( 'ics' );
@@ -1142,6 +1203,7 @@ add_action( 'admin_init', function () {
 	}, 'hbch-tab-farben', 'hbch_farben_reset' );
 
 	add_settings_section( 'hbch_farben_vorschau', 'Live-Vorschau', function () {
+		hbch_render_preview_details_start();
 		echo '<p>Die Farbfelder oben wirken sofort auf diese Vorschau, gespeichert wird aber erst mit "Änderungen speichern". Ein Wechsel des Vorschau-Teams lädt die Seite neu, ungespeicherte Farben gehen dabei verloren. Die Vorschau zeigt die globalen Farben; Block-Überschreibungen erscheinen nur im Block-Editor und im Frontend.</p>';
 		hbch_render_preview_team_selector( 'farben' );
 		$slug = hbch_get_preview_team_slug();
@@ -1167,6 +1229,7 @@ add_action( 'admin_init', function () {
 				});
 			});
 		})();</script>';
+		hbch_render_preview_details_end();
 	}, 'hbch-tab-farben' );
 
 	add_settings_section( 'hbch_farben_referenz', 'CSS-Variablen (Referenz)', function () {
@@ -1174,7 +1237,9 @@ add_action( 'admin_init', function () {
 	}, 'hbch-tab-farben' );
 	add_settings_field( 'css_vars_reference', 'Variablen (Referenz)', function () {
 		printf(
-			'<textarea readonly rows="%d" cols="60" class="large-text code" style="background:#f0f0f1;color:#555;" onclick="this.select()">%s</textarea>',
+			'<details class="hbch-admin-details"><summary>Variablen anzeigen (nur zur Referenz)</summary>' .
+			'<textarea readonly rows="%d" cols="60" class="large-text code" style="background:#f0f0f1;color:#555;margin-top:0.5em;" onclick="this.select()">%s</textarea>' .
+			'</details>',
 			count( hbch_color_roles() ) + 2,
 			esc_textarea( hbch_colors_root_css( true ) )
 		);
