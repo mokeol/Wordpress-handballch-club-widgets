@@ -47,3 +47,8 @@
 .handballch-api-block-notice {
 	margin-bottom: 1em;
 }
+.hbch-admin-details summary {
+	cursor: pointer;
+	font-weight: 600;
+	padding: 6px 0;
+}
