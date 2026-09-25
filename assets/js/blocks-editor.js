@@ -4,11 +4,16 @@
  * Server-Side-Render, gebaut von denselben Render-Funktionen wie die
  * Shortcodes (siehe shortcodes.php).
  *
- * "Rangliste" hat eine Checkbox "Detailliert" (kompakt/detailliert) und,
- * wenn detailliert aktiv ist, zusätzlich "Auf-/Abstiegszonen farbig
- * markieren". "Team – Spielplan / Resultate" und "Verein – Spielplan /
- * Resultate" haben je zwei unabhängige Checkboxen ("Nächste Spiele" /
- * "Resultate").
+ * "Rangliste", "Team – Spielplan / Resultate" und "Countdown" teilen sich
+ * denselben Aufbau (Team-Auswahl, "keine Teams konfiguriert"-Hinweis,
+ * Farbpanel) und werden daher über registerHbchTeamBlock() registriert.
+ * "Rangliste" hat zusätzlich eine Checkbox "Detailliert" (kompakt/
+ * detailliert) und, wenn detailliert aktiv ist, zusätzlich "Auf-/
+ * Abstiegszonen farbig markieren". "Team – Spielplan / Resultate" hat zwei
+ * unabhängige Checkboxen ("Nächste Spiele" / "Resultate"), siehe
+ * renderGamesShowPanel(). "Verein – Spielplan / Resultate" und "Kalender"
+ * haben eigene Registrierungen, da bei ihnen kein Team zwingend ausgewählt
+ * werden muss.
  *
  * Jeder Block hat ausserdem ein Panel "Farben", das die globalen Farben nur
  * für diesen Block überschreibt. Die Farbliste kommt aus PHP
@@ -119,7 +124,7 @@
 	// Panel "Anzeige" für Team-/Vereins-Spielplan: zwei unabhängige
 	// Checkboxen ("Nächste Spiele" / "Resultate").
 	function renderGamesShowPanel( attributes, setAttributes ) {
-		return el( PanelBody, { title: __( 'Anzeige', 'handballch-api' ) },
+		return el( PanelBody, { title: __( 'Anzeige', 'handballch-api' ), key: 'anzeige' },
 			el( CheckboxControl, {
 				label: __( 'Nächste Spiele', 'handballch-api' ),
 				checked: !! attributes.show_next,
@@ -136,162 +141,128 @@
 		);
 	}
 
-	// --- Blöcke -----------------------------------------------------------
+	// --- Gemeinsame Basis: Blöcke, die zwingend ein Team brauchen ---------
+
+	/**
+	 * Registriert einen Block, der immer ein Team-Auswahlfeld in der
+	 * Seitenleiste hat (Panel "Team"), ohne Team einen Auswahl-Platzhalter
+	 * statt der Server-Side-Render-Vorschau zeigt, und ein Farbpanel besitzt.
+	 *
+	 * config:
+	 *   name, title, description, icon      — wie bei registerBlockType()
+	 *   attributes                          — zusätzliche Attribute neben
+	 *                                          "team" und den Farb-Attributen
+	 *   renderPanels( attributes, setAttributes )
+	 *                                        — optional, liefert ein Array
+	 *                                          zusätzlicher <PanelBody>-
+	 *                                          Elemente (z. B. "Anzeige")
+	 */
+	function registerHbchTeamBlock( config ) {
+		blocks.registerBlockType( config.name, {
+			title: config.title,
+			description: config.description,
+			category: 'handballch-api',
+			icon: config.icon,
+			attributes: withColorAttributes( config.name, Object.assign(
+				{ team: { type: 'string', default: '' } },
+				config.attributes || {}
+			) ),
+			edit: function ( props ) {
+				var blockProps = useBlockProps();
+				var attributes = props.attributes;
+				var setAttributes = props.setAttributes;
+
+				if ( teamSlugs.length === 0 ) {
+					return el( 'div', blockProps, el( Placeholder, { icon: config.icon, label: config.title }, renderNoTeamsNotice() ) );
+				}
+
+				var teamPanel = el( PanelBody, { title: __( 'Team', 'handballch-api' ), key: 'team' },
+					el( SelectControl, {
+						label: __( 'Team', 'handballch-api' ),
+						value: attributes.team,
+						options: teamOptions( __( '— bitte wählen —', 'handballch-api' ) ),
+						onChange: function ( value ) { setAttributes( { team: value } ); },
+						help: __( 'Weitere Teams: Einstellungen → handball.ch Club-Widgets → „Allgemein & API“.', 'handballch-api' ),
+					} )
+				);
+
+				// Zusätzliche Panels als eigene Argumente (nicht als Array) an
+				// InspectorControls übergeben, damit React keine "key"-Props
+				// für jedes Panel verlangt.
+				var panels = [ teamPanel ].concat( config.renderPanels ? config.renderPanels( attributes, setAttributes ) : [] );
+				var colorPanel = renderColorPanel( config.name, attributes, setAttributes );
+				if ( colorPanel ) {
+					panels.push( colorPanel );
+				}
+
+				return el( 'div', blockProps,
+					el.apply( null, [ InspectorControls, {} ].concat( panels ) ),
+					attributes.team
+						? el( serverSideRender, { block: config.name, attributes: attributes } )
+						: el( Placeholder, { icon: config.icon, label: config.title }, __( 'Bitte in der Seitenleiste rechts ein Team auswählen.', 'handballch-api' ) )
+				);
+			},
+			save: function () { return null; },
+		} );
+	}
 
 	// "Rangliste": Team-Auswahl, Checkbox "Detailliert" und (nur wenn
 	// detailliert aktiv) Checkbox "Auf-/Abstiegszonen farbig markieren".
-	( function () {
-		var name = 'handballch/ranking';
-		var title = __( 'Rangliste', 'handballch-api' );
-		var icon = 'chart-bar';
-
-		blocks.registerBlockType( name, {
-			title: title,
-			description: __( 'Kompakte oder detaillierte Rangliste für ein Team, mit optionaler Zonenfärbung.', 'handballch-api' ),
-			category: 'handballch-api',
-			icon: icon,
-			attributes: withColorAttributes( name, {
-				team: { type: 'string', default: '' },
-				detailed: { type: 'boolean', default: false },
-				show_zones: { type: 'boolean', default: true },
-			} ),
-			edit: function ( props ) {
-				var blockProps = useBlockProps();
-				var attributes = props.attributes;
-				var setAttributes = props.setAttributes;
-
-				if ( teamSlugs.length === 0 ) {
-					return el( 'div', blockProps, el( Placeholder, { icon: icon, label: title }, renderNoTeamsNotice() ) );
-				}
-
-				return el( 'div', blockProps,
-					el( InspectorControls, {},
-						el( PanelBody, { title: __( 'Team', 'handballch-api' ) },
-							el( SelectControl, {
-								label: __( 'Team', 'handballch-api' ),
-								value: attributes.team,
-								options: teamOptions( __( '— bitte wählen —', 'handballch-api' ) ),
-								onChange: function ( value ) { setAttributes( { team: value } ); },
-								help: __( 'Weitere Teams: Einstellungen → handball.ch Club-Widgets → „Allgemein & API“.', 'handballch-api' ),
-							} )
-						),
-						el( PanelBody, { title: __( 'Anzeige', 'handballch-api' ) },
-							el( CheckboxControl, {
-								label: __( 'Detaillierte Rangliste (Logo, S/U/N, Tore)', 'handballch-api' ),
-								checked: !! attributes.detailed,
-								onChange: function ( value ) { setAttributes( { detailed: value } ); },
-								help: __( 'Unbestimmt = kompakte Rangliste (Platz, Team, Spiele, Punkte).', 'handballch-api' ),
-							} ),
-							attributes.detailed
-								? el( CheckboxControl, {
-									label: __( 'Auf-/Abstiegszonen farbig markieren', 'handballch-api' ),
-									checked: !! attributes.show_zones,
-									onChange: function ( value ) { setAttributes( { show_zones: value } ); },
-									help: __( 'Färbt das Rang-Badge nach Auf-/Abstiegszone (Farben im Reiter „Farben“).', 'handballch-api' ),
-								} )
-								: null
-						),
-						renderColorPanel( name, attributes, setAttributes )
-					),
-					attributes.team
-						? el( serverSideRender, { block: name, attributes: attributes } )
-						: el( Placeholder, { icon: icon, label: title }, __( 'Bitte in der Seitenleiste rechts ein Team auswählen.', 'handballch-api' ) )
-				);
-			},
-			save: function () { return null; },
-		} );
-	} )();
+	registerHbchTeamBlock( {
+		name: 'handballch/ranking',
+		title: __( 'Rangliste', 'handballch-api' ),
+		description: __( 'Kompakte oder detaillierte Rangliste für ein Team, mit optionaler Zonenfärbung.', 'handballch-api' ),
+		icon: 'chart-bar',
+		attributes: {
+			detailed: { type: 'boolean', default: false },
+			show_zones: { type: 'boolean', default: true },
+		},
+		renderPanels: function ( attributes, setAttributes ) {
+			return [
+				el( PanelBody, { title: __( 'Anzeige', 'handballch-api' ), key: 'anzeige' },
+					el( CheckboxControl, {
+						label: __( 'Detaillierte Rangliste (Logo, S/U/N, Tore)', 'handballch-api' ),
+						checked: !! attributes.detailed,
+						onChange: function ( value ) { setAttributes( { detailed: value } ); },
+						help: __( 'Unbestimmt = kompakte Rangliste (Platz, Team, Spiele, Punkte).', 'handballch-api' ),
+					} ),
+					attributes.detailed
+						? el( CheckboxControl, {
+							label: __( 'Auf-/Abstiegszonen farbig markieren', 'handballch-api' ),
+							checked: !! attributes.show_zones,
+							onChange: function ( value ) { setAttributes( { show_zones: value } ); },
+							help: __( 'Färbt das Rang-Badge nach Auf-/Abstiegszone (Farben im Reiter „Farben“).', 'handballch-api' ),
+						} )
+						: null
+				),
+			];
+		},
+	} );
 
 	// "Team – Spielplan / Resultate": Team-Auswahl + Checkboxen "Nächste Spiele"/"Resultate".
-	( function () {
-		var name = 'handballch/team-games';
-		var title = __( 'Team – Spielplan / Resultate', 'handballch-api' );
-		var icon = 'calendar-alt';
-
-		blocks.registerBlockType( name, {
-			title: title,
-			description: __( 'Nächste Spiele und/oder Resultate eines Teams, per Checkbox wählbar.', 'handballch-api' ),
-			category: 'handballch-api',
-			icon: icon,
-			attributes: withColorAttributes( name, {
-				team: { type: 'string', default: '' },
-				show_next: { type: 'boolean', default: true },
-				show_last: { type: 'boolean', default: true },
-			} ),
-			edit: function ( props ) {
-				var blockProps = useBlockProps();
-				var attributes = props.attributes;
-				var setAttributes = props.setAttributes;
-
-				if ( teamSlugs.length === 0 ) {
-					return el( 'div', blockProps, el( Placeholder, { icon: icon, label: title }, renderNoTeamsNotice() ) );
-				}
-
-				return el( 'div', blockProps,
-					el( InspectorControls, {},
-						el( PanelBody, { title: __( 'Team', 'handballch-api' ) },
-							el( SelectControl, {
-								label: __( 'Team', 'handballch-api' ),
-								value: attributes.team,
-								options: teamOptions( __( '— bitte wählen —', 'handballch-api' ) ),
-								onChange: function ( value ) { setAttributes( { team: value } ); },
-								help: __( 'Weitere Teams: Einstellungen → handball.ch Club-Widgets → „Allgemein & API“.', 'handballch-api' ),
-							} )
-						),
-						renderGamesShowPanel( attributes, setAttributes ),
-						renderColorPanel( name, attributes, setAttributes )
-					),
-					attributes.team
-						? el( serverSideRender, { block: name, attributes: attributes } )
-						: el( Placeholder, { icon: icon, label: title }, __( 'Bitte in der Seitenleiste rechts ein Team auswählen.', 'handballch-api' ) )
-				);
-			},
-			save: function () { return null; },
-		} );
-	} )();
+	registerHbchTeamBlock( {
+		name: 'handballch/team-games',
+		title: __( 'Team – Spielplan / Resultate', 'handballch-api' ),
+		description: __( 'Nächste Spiele und/oder Resultate eines Teams, per Checkbox wählbar.', 'handballch-api' ),
+		icon: 'calendar-alt',
+		attributes: {
+			show_next: { type: 'boolean', default: true },
+			show_last: { type: 'boolean', default: true },
+		},
+		renderPanels: function ( attributes, setAttributes ) {
+			return [ renderGamesShowPanel( attributes, setAttributes ) ];
+		},
+	} );
 
 	// "Countdown (nächstes Spiel)": nur Team-Auswahl, keine Anzeige-Checkboxen.
-	( function () {
-		var name = 'handballch/next-game';
-		var title = __( 'Countdown (nächstes Spiel)', 'handballch-api' );
-		var icon = 'clock';
+	registerHbchTeamBlock( {
+		name: 'handballch/next-game',
+		title: __( 'Countdown (nächstes Spiel)', 'handballch-api' ),
+		description: __( 'Nächstes Spiel eines Teams mit Live-Countdown.', 'handballch-api' ),
+		icon: 'clock',
+	} );
 
-		blocks.registerBlockType( name, {
-			title: title,
-			description: __( 'Nächstes Spiel eines Teams mit Live-Countdown.', 'handballch-api' ),
-			category: 'handballch-api',
-			icon: icon,
-			attributes: withColorAttributes( name, { team: { type: 'string', default: '' } } ),
-			edit: function ( props ) {
-				var blockProps = useBlockProps();
-				var attributes = props.attributes;
-				var setAttributes = props.setAttributes;
-
-				if ( teamSlugs.length === 0 ) {
-					return el( 'div', blockProps, el( Placeholder, { icon: icon, label: title }, renderNoTeamsNotice() ) );
-				}
-
-				return el( 'div', blockProps,
-					el( InspectorControls, {},
-						el( PanelBody, { title: __( 'Team', 'handballch-api' ) },
-							el( SelectControl, {
-								label: __( 'Team', 'handballch-api' ),
-								value: attributes.team,
-								options: teamOptions( __( '— bitte wählen —', 'handballch-api' ) ),
-								onChange: function ( value ) { setAttributes( { team: value } ); },
-								help: __( 'Weitere Teams: Einstellungen → handball.ch Club-Widgets → „Allgemein & API“.', 'handballch-api' ),
-							} )
-						),
-						renderColorPanel( name, attributes, setAttributes )
-					),
-					attributes.team
-						? el( serverSideRender, { block: name, attributes: attributes } )
-						: el( Placeholder, { icon: icon, label: title }, __( 'Bitte in der Seitenleiste rechts ein Team auswählen.', 'handballch-api' ) )
-				);
-			},
-			save: function () { return null; },
-		} );
-	} )();
+	// --- Blöcke ohne zwingende Team-Auswahl --------------------------------
 
 	// "Verein – Spielplan / Resultate": Layout, Anzahl, Ausschluss + Checkboxen.
 	( function () {
