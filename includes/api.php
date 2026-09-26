@@ -1006,7 +1006,7 @@ function hbch_logo_url( $teamId, $clubId, $width = null ) {
  * iOS Safari die Bilder teils gar nicht nach.
  */
 function hbch_render_single_logo( $url, $css_class, $width = null, $alt = '', $height = null ) {
-	$width  = (int) ( $width ?: 90 );
+	$width  = (int) ( $width ?: 80 );
 	$height = (int) ( $height ?: $width );
 	return sprintf(
 		'<img class="%1$s" src="%2$s" alt="%3$s" width="%4$d" height="%5$d">',
