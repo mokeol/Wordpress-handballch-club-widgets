@@ -4,6 +4,14 @@ Die Versionshistorie steht in dieser Datei; der Reiter „Changelog“ im Adminp
 Bei jedem Release: Header-Version **und** Konstante `HBCH_VERSION` in `handballch-api.php` gemeinsam anpassen.
 Der Dateiname muss exakt `CHANGELOG.md` lauten (auf Linux-Servern case-sensitive).
 
+## 1.0.7 — Logos als WebP
+- Neu: Team- und Vereinslogos werden beim Download in den lokalen Logo-Cache zu WebP umgewandelt, sofern der
+  Server WebP erzeugen kann (GD oder Imagick). Das spart rund die Hälfte der Dateigrösse. Ohne WebP-Unterstützung
+  oder bei einem Fehler bleibt das PNG wie bisher.
+- Bestehende PNG-Kopien werden weiterverwendet, bis sie ablaufen, und danach als WebP ersetzt.
+- Der tägliche Aufräum-Job entfernt jetzt auch abgelaufene `.webp`-Dateien.
+- Neue Funktion `hbch_webp_supported()` in `includes/api.php`.
+
 ## 1.0.6 — Performance & Aufräumen (keine funktionalen Änderungen)
 - Performance: `hbch_page_uses_plugin()` (entscheidet, ob CSS/JS auf einer Seite geladen werden) wird jetzt pro
   Seite als Transient gecacht, statt bei jedem Seitenaufruf den Seiteninhalt, referenzierte wiederverwendbare
