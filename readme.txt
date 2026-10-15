@@ -2,9 +2,9 @@
 Contributors: your-wordpress-org-username
 Tags: handball, sports, standings, fixtures, calendar
 Requires at least: 6.0
-Tested up to: 7.1
+Tested up to: 7.1.3
 Requires PHP: 7.4
-Stable tag: 1.0.6
+Stable tag: 1.0.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -58,7 +58,7 @@ Used to load standings, fixtures, results and team data. Your server sends the c
 
 **handball.ch team logos (handball.ch/images/logo)**
 
-Team and club logos are downloaded by your server and stored in `wp-content/uploads/hbch-logo-cache/`. Until a logo has been stored locally (first request only), the page links directly to the image on handball.ch, so the visitor's browser loads it from there.
+Team and club logos are downloaded by your server and stored (converted to WebP where the server supports it) in `wp-content/uploads/hbch-logo-cache/`. Until a logo has been stored locally (first request only), the page links directly to the image on handball.ch, so the visitor's browser loads it from there.
 
 **handball.ch match center**
 
@@ -116,6 +116,9 @@ The API has no "running" status, so a game counts as live for 90 minutes after k
 No, it is built for the API of the Swiss Handball Federation.
 
 == Changelog ==
+= 1.0.7 =
+* Team and club logos are converted to WebP when stored in the local logo cache, if the server supports it (GD or Imagick). Otherwise the PNG is kept as before.
+* The daily cleanup job also removes expired .webp files.
 = 1.0.6 =
 * Performance: whether a page loads the plugin's CSS/JS is now cached per page (transient, invalidated on post/widget save) instead of being recomputed on every single page load.
 * Internal cleanup: the near-duplicate "next games" / "last games" table renderers, and the "next"/"last" card renderers of the club-wide widgets, are now single shared functions; the block editor's four simple blocks share one factory instead of repeating the same boilerplate three times. No change to markup, CSS classes, or behaviour.
