@@ -955,10 +955,21 @@ function hbch_logo_fail_key( $remote_url ) {
 }
 
 /**
+ * Kann dieser Server WebP erzeugen (GD oder Imagick mit WebP-Support)?
+ */
+function hbch_webp_supported() {
+	static $ok = null;
+	if ( $ok === null ) {
+		$ok = (bool) wp_image_editor_supports( [ 'mime_type' => 'image/webp' ] );
+	}
+	return $ok;
+}
+
+/**
  * URL eines Team-/Vereinslogos. Beim ersten Aufruf kommt sofort die
  * Original-URL, ein einmaliger WP-Cron-Job lädt die Datei nach
- * uploads/hbch-logo-cache/. Danach wird die lokale Kopie ausgeliefert.
- * Pro Request wird jede URL nur einmal geprüft.
+ * uploads/hbch-logo-cache/ (wenn möglich als WebP). Danach wird die lokale
+ * Kopie ausgeliefert. Pro Request wird jede URL nur einmal geprüft.
  */
 function hbch_logo_url( $teamId, $clubId, $width = null ) {
 	static $memo = [];
@@ -983,14 +994,15 @@ function hbch_logo_url( $teamId, $clubId, $width = null ) {
 	$cache_dir = $upload_dir['basedir'] . '/hbch-logo-cache';
 	$cache_url = $upload_dir['baseurl'] . '/hbch-logo-cache';
 
-	$filename  = 'logo-' . md5( $remote_url ) . '.png';
-	$file_path = $cache_dir . '/' . $filename;
-	$file_url  = $cache_url . '/' . $filename;
-
+	$base       = 'logo-' . md5( $remote_url );
 	$cache_days = hbch_get_setting( 'logo_cache_days' );
 
-	if ( file_exists( $file_path ) && ( time() - filemtime( $file_path ) ) < $cache_days * DAY_IN_SECONDS ) {
-		return $memo[ $remote_url ] = esc_url( $file_url );
+	// Zuerst die WebP-Kopie, dann das PNG (ältere Kopien oder Server ohne WebP).
+	foreach ( [ 'webp', 'png' ] as $ext ) {
+		$file_path = $cache_dir . '/' . $base . '.' . $ext;
+		if ( file_exists( $file_path ) && ( time() - filemtime( $file_path ) ) < $cache_days * DAY_IN_SECONDS ) {
+			return $memo[ $remote_url ] = esc_url( $cache_url . '/' . $base . '.' . $ext );
+		}
 	}
 
 	if ( get_transient( hbch_logo_fail_key( $remote_url ) ) === false && ! wp_next_scheduled( 'hbch_download_logo', [ $remote_url ] ) ) {
@@ -1057,7 +1069,9 @@ function hbch_team_logo_markup( $team_name, $team_id, $club_id, $css_class, $wid
  *
  * Gehärtet: nur https://handball.ch/… wird geladen, und die Datei wird nur
  * gespeichert, wenn der Inhalt wirklich ein Bild ist (PNG/JPEG/GIF/WebP).
- * Schlägt der Download fehl, verhindert ein Marker (1 Tag) neue Versuche.
+ * Wenn der Server WebP erzeugen kann, wird das Logo zu WebP umgewandelt und
+ * das PNG gelöscht; sonst bleibt das PNG. Schlägt der Download fehl,
+ * verhindert ein Marker (1 Tag) neue Versuche.
  */
 function hbch_download_logo_file( $remote_url ) {
 	$parts = wp_parse_url( (string) $remote_url );
@@ -1090,6 +1104,19 @@ function hbch_download_logo_file( $remote_url ) {
 		if ( $info && in_array( $info['mime'] ?? '', [ 'image/png', 'image/jpeg', 'image/gif', 'image/webp' ], true ) ) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 			$saved = false !== file_put_contents( $file_path, $body );
+
+			// Wenn möglich zu WebP umwandeln und das PNG danach löschen.
+			// Schlägt die Umwandlung fehl, bleibt das PNG liegen.
+			if ( $saved && hbch_webp_supported() ) {
+				$webp_path = preg_replace( '/\.png$/', '.webp', $file_path );
+				$editor    = wp_get_image_editor( $file_path );
+				if ( ! is_wp_error( $editor ) ) {
+					$result = $editor->save( $webp_path, 'image/webp' );
+					if ( ! is_wp_error( $result ) && file_exists( $webp_path ) ) {
+						wp_delete_file( $file_path );
+					}
+				}
+			}
 		}
 	}
 
@@ -1102,9 +1129,9 @@ function hbch_download_logo_file( $remote_url ) {
 add_action( 'hbch_download_logo', 'hbch_download_logo_file' );
 
 /**
- * Täglicher Aufräum-Job (geplant in handballch-api.php): löscht Logo-Kopien,
- * die älter als das Doppelte der Logo-Cache-Dauer sind (z. B. verwaiste
- * Dateien nach einem Team-ID-Wechsel pro Saison).
+ * Täglicher Aufräum-Job (geplant in handballch-api.php): löscht Logo-Kopien
+ * (PNG und WebP), die älter als das Doppelte der Logo-Cache-Dauer sind
+ * (z. B. verwaiste Dateien nach einem Team-ID-Wechsel pro Saison).
  */
 add_action( 'hbch_cleanup_logo_cache', function () {
 	$upload_dir = wp_upload_dir();
@@ -1113,7 +1140,11 @@ add_action( 'hbch_cleanup_logo_cache', function () {
 		return;
 	}
 	$max_age = max( 1, (int) hbch_get_setting( 'logo_cache_days' ) ) * 2 * DAY_IN_SECONDS;
-	foreach ( glob( trailingslashit( $cache_dir ) . '*.png' ) ?: [] as $file ) {
+	$files   = array_merge(
+		glob( trailingslashit( $cache_dir ) . '*.png' ) ?: [],
+		glob( trailingslashit( $cache_dir ) . '*.webp' ) ?: []
+	);
+	foreach ( $files as $file ) {
 		if ( is_file( $file ) && ( time() - filemtime( $file ) ) > $max_age ) {
 			wp_delete_file( $file );
 		}
