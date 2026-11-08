@@ -62,9 +62,7 @@ function hbch_strip_logo_title_attributes( $content ) {
 add_filter( 'the_content', 'hbch_strip_logo_title_attributes', PHP_INT_MAX );
 
 /**
- * Enthält ein post_content-String einen Shortcode oder Block des Plugins?
- * Die Blocknamen müssen zu blocks.php passen (fünf Blöcke plus die alten,
- * inzwischen zusammengelegten Blocknamen aus hbch_legacy_block_map()).
+ * Enthält ein post_content-String einen Shortcode oder aktuellen Block des Plugins?
  */
 function hbch_content_uses_plugin( $content ) {
 	if ( $content === '' ) {
@@ -75,13 +73,10 @@ function hbch_content_uses_plugin( $content ) {
 		'hbch_ranking', 'hbch_team_ranking', 'hbch_team_next_games', 'hbch_team_last_games',
 		'hbch_home_next_games', 'hbch_home_last_games', 'hbch_next_game', 'hbch_ics',
 	];
-	$blocks = array_merge(
-		[
-			'handballch/ranking', 'handballch/team-games', 'handballch/next-game',
-			'handballch/home-games', 'handballch/ics-subscribe',
-		],
-		array_keys( hbch_legacy_block_map() )
-	);
+	$blocks = [
+		'handballch/ranking', 'handballch/team-games', 'handballch/next-game',
+		'handballch/home-games', 'handballch/ics-subscribe',
+	];
 
 	foreach ( $shortcodes as $sc ) {
 		if ( has_shortcode( $content, $sc ) ) {
