@@ -29,7 +29,7 @@ function hbch_block_wrap( $inner_html, $style = '' ) {
 	return sprintf( '<div %s>%s</div>', get_block_wrapper_attributes( $extra ), $inner_html );
 }
 
-legacy map and filter/**
+/**
  * Registriert einen Block samt Farb-Attributen. Die Farb-Attribute werden in
  * assets/js/blocks-editor.js aus denselben Daten automatisch mitregistriert.
  */
