@@ -15,11 +15,6 @@
  *     zusätzlich optional Auf-/Abstiegszonen farbig markieren.
  *   - "Team – Spielplan" / "Verein – Spielplan": Nächste Spiele und/oder
  *     Resultate (zwei unabhängige Checkboxen).
- *
- * Die alten Einzelblöcke sind nicht mehr registriert. Bestehende Seiten mit
- * den alten Blocknamen werden über hbch_legacy_block_map() beim Rendern auf
- * die neuen Blöcke umgeleitet (Frontend) bzw. im Editor zur Umwandlung
- * angeboten (assets/js/blocks-legacy.js).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -34,41 +29,7 @@ function hbch_block_wrap( $inner_html, $style = '' ) {
 	return sprintf( '<div %s>%s</div>', get_block_wrapper_attributes( $extra ), $inner_html );
 }
 
-/**
- * Alte Blocknamen (vor der Zusammenlegung) => neuer Block plus Attribute, die
- * der neue Block dafür braucht. Ist ein Name hier falsch oder fehlt einer,
- * genügt eine Zeile; die Liste dient Frontend, Asset-Erkennung und Editor.
- */
-function hbch_legacy_block_map() {
-	return [
-		'handballch/team-ranking'    => [ 'block' => 'handballch/ranking',    'attrs' => [ 'detailed' => true, 'show_zones' => true ] ],
-		'handballch/team-next-games' => [ 'block' => 'handballch/team-games', 'attrs' => [ 'show_next' => true,  'show_last' => false ] ],
-		'handballch/team-last-games' => [ 'block' => 'handballch/team-games', 'attrs' => [ 'show_next' => false, 'show_last' => true ] ],
-		'handballch/home-next-games' => [ 'block' => 'handballch/home-games', 'attrs' => [ 'show_next' => true,  'show_last' => false ] ],
-		'handballch/home-last-games' => [ 'block' => 'handballch/home-games', 'attrs' => [ 'show_next' => false, 'show_last' => true ] ],
-	];
-}
-
-/**
- * Frontend: alte Blocknamen vor dem Rendern auf die neuen Blöcke umleiten.
- * Die Seiteninhalte in der Datenbank bleiben unverändert.
- */
-add_filter( 'render_block_data', function ( $parsed_block ) {
-	$name = $parsed_block['blockName'] ?? '';
-	$map  = hbch_legacy_block_map();
-	if ( ! $name || ! isset( $map[ $name ] ) ) {
-		return $parsed_block;
-	}
-
-	$attrs = ( isset( $parsed_block['attrs'] ) && is_array( $parsed_block['attrs'] ) ) ? $parsed_block['attrs'] : [];
-
-	$parsed_block['blockName'] = $map[ $name ]['block'];
-	$parsed_block['attrs']     = array_merge( $attrs, $map[ $name ]['attrs'] );
-
-	return $parsed_block;
-} );
-
-/**
+legacy map and filter/**
  * Registriert einen Block samt Farb-Attributen. Die Farb-Attribute werden in
  * assets/js/blocks-editor.js aus denselben Daten automatisch mitregistriert.
  */
@@ -218,16 +179,6 @@ add_action( 'enqueue_block_editor_assets', function () {
 		'colorsUrl'         => admin_url( 'options-general.php?page=hbch-settings&tab=farben' ),
 		'blockColors'       => hbch_block_colors_for_js(),
 	] );
-
-	// Alte Blocknamen: nur zum Umwandeln im Editor (nicht im Inserter).
-	wp_enqueue_script(
-		'handballch-api-blocks-legacy',
-		HBCH_URL . 'assets/js/blocks-legacy.js',
-		[ 'wp-blocks', 'wp-element', 'wp-block-editor', 'wp-components', 'wp-data', 'wp-i18n' ],
-		HBCH_VERSION,
-		true
-	);
-	wp_localize_script( 'handballch-api-blocks-legacy', 'handballchApiLegacyBlocks', hbch_legacy_block_map() );
 
 	wp_enqueue_style( 'handballch-api-blocks-editor', HBCH_URL . 'assets/css/admin.css', [], HBCH_VERSION );
 } );

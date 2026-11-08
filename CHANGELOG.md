@@ -4,6 +4,13 @@ Die Versionshistorie steht in dieser Datei; der Reiter „Changelog“ im Adminp
 Bei jedem Release: Header-Version **und** Konstante `HBCH_VERSION` in `handballch-api.php` gemeinsam anpassen.
 Der Dateiname muss exakt `CHANGELOG.md` lauten (auf Linux-Servern case-sensitive).
 
+## 1.0.8 — Kompatibilitätscode entfernt und vereinfacht
+- Alte Gutenberg-Blocknamen und ihre Frontend-Umleitung entfernt; nur die fünf aktuellen Blöcke werden erkannt.
+- Editor-Umwandlungshilfe `blocks-legacy.js` entfernt.
+- Die Wrapper `hbch_render_games_table_next()` und `_last()` entfernt; intern wird direkt `hbch_render_games_table()` verwendet.
+- Den alten gespeicherten `api_token`-Fallback entfernt. API-Zugriff benötigt Club-ID und API-Passwort; ein alter gespeicherter Token wird beim nächsten Speichern der Einstellungen gelöscht.
+- Den redundanten ICS-Fetch-Wrapper entfernt.
+
 ## 1.0.7 — Logos als WebP
 - Neu: Team- und Vereinslogos werden beim Download in den lokalen Logo-Cache zu WebP umgewandelt, sofern der
   Server WebP erzeugen kann (GD oder Imagick). Das spart rund die Hälfte der Dateigrösse. Ohne WebP-Unterstützung

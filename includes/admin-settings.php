@@ -1251,6 +1251,7 @@ function hbch_sanitize_settings( $input ) {
 	$current  = get_option( HBCH_OPTION, [] );
 	$current  = is_array( $current ) ? array_merge( $defaults, $current ) : $defaults;
 	$clean    = $current;
+	unset( $clean['api_token'] );
 
 	if ( isset( $input['club_id'] ) ) {
 		// Positive Ganzzahl, sonst 0 (= noch nicht konfiguriert).

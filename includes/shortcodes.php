@@ -195,19 +195,6 @@ function hbch_render_games_table( array $games, $table_id, $variant, $show_leagu
 }
 
 /**
- * Abwärtskompatible Wrapper der bis 1.0.5 getrennten Render-Funktionen
- * hbch_render_games_table_next()/_last() — falls ein Child-Theme oder
- * Snippet sie direkt aufruft. Neuer Code sollte hbch_render_games_table()
- * mit $variant 'next'/'last' verwenden.
- */
-function hbch_render_games_table_next( array $games, $table_id, $show_league = false ) {
-	return hbch_render_games_table( $games, $table_id, 'next', $show_league );
-}
-function hbch_render_games_table_last( array $games, $table_id, $show_league = false ) {
-	return hbch_render_games_table( $games, $table_id, 'last', $show_league );
-}
-
-/**
  * Zu spielende Spiele eines Teams (#hbch-team-games-next), inkl. JSON-LD.
  */
 function hbch_render_team_next_games( $team_id ) {
