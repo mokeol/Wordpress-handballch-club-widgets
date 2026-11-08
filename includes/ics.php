@@ -17,13 +17,6 @@ function hbch_ics_register_rewrite_rule() {
 }
 add_action( 'init', 'hbch_ics_register_rewrite_rule' );
 
-/**
- * Spiele des eigenen Vereins für den ICS-Export.
- */
-function hbch_ics_fetch_games(): array {
-	return hbch_fetch_club_games( hbch_club_games_url() );
-}
-
 function hbch_ics_escape( string $text ): string {
 	$text = str_replace( [ "\\", ",", ";" ], [ "\\\\", "\\,", "\\;" ], $text );
 	$text = preg_replace( '/\r\n|\r|\n/', '\\n', $text );
@@ -159,7 +152,7 @@ function hbch_ics_build( array $games, string $calendar_name = '' ): string {
  * wird, solange der Standardname gilt, "<Seitenname> – <Liga>" verwendet.
  */
 function hbch_ics_generate( string $team_slug = '' ): string {
-	$games         = hbch_ics_fetch_games();
+	$games         = hbch_fetch_club_games( hbch_club_games_url() );
 	$calendar_name = hbch_get_setting( 'text_ics_calendar_name' );
 	$default_name  = $calendar_name;
 
