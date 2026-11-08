@@ -316,7 +316,6 @@ handballch-api/
     ├── css/public.css          Frontend-Styles (mit HBCH-TAB-Markern für die Referenzanzeige)
     ├── css/admin.css           Adminpanel und Block-Editor
     ├── js/public.js
-    ├──  js/blocks-legacy.js
     └── js/blocks-editor.js     Editor-Ansicht der Blöcke (ohne Build-Schritt)
 ```
 
@@ -337,7 +336,7 @@ Deinstallation über das WordPress-Backend löscht die Plugin-Option, alle `hbch
   Im Editor-JS ist nichts zu ändern (die Liste kommt aus PHP).
 - **Neuer Block:** in `blocks.php` (`hbch_register_block()`) und `assets/js/blocks-editor.js` registrieren **und** den
   Blocknamen in `hbch_content_uses_plugin()` (`frontend.php`) aufnehmen, sonst lädt das Plugin auf Seiten mit nur diesem
-  Block kein CSS/JS.
+  Block kein CSS/JS. Alte Blocknamen werden nicht mehr unterstützt.
 - Ändert sich die Struktur eines Einstellungs-Arrays, braucht es einen Migrationspfad für bestehende Installationen.
 - Zeit: `gameDateTime` von handball.ch ist naive Schweizer Ortszeit, immer mit `Europe/Zurich` parsen
   (am besten über `hbch_game_datetime()`, das ungültige Werte abfängt).
